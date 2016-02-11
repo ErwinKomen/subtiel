@@ -395,16 +395,20 @@ namespace opsubRpc.util {
     // History:
     // 04-02-2016  ERK Created
     // ------------------------------------------------------------------------------------------------------------
-    public bool getXmlStats(String sFileIn, ref String sSimHash, ref int iWords, ref int iSents) {
+    public bool getXmlStats(String sFileIn, ref String sSimHash, ref String sStat,
+      ref int iWords, ref int iSents) {
       String sMethod = "simhash";
 
       try {
         // Initialise
         iWords = 0; iSents = 0;
+        bool bUseNext = false; 
         // We need to have our own XmlDocument ready
         XmlDocument pdxLocal = new XmlDocument();
         // Prepare a string reader to read all we need
         StringBuilder sbThis = new StringBuilder();
+        // Alsoo prepare a string reader to store potential StatusInfo
+        StringBuilder sbStat = new StringBuilder();
         // Create an XmlReader to get to the <s><t> nodes...
         using (StreamReader rdFileTmp = new StreamReader(sFileIn))
         using (XmlReader rdFolia = XmlReader.Create(rdFileTmp)) {
@@ -419,8 +423,20 @@ namespace opsubRpc.util {
                 // Check the value
                 if (sClass == "nld" || sClass == "nl") {
                   // Correct attribute: read the node
-                  String sLine = rdFolia.ReadInnerXml() + "\n";
-                  sbThis.Append(sLine);
+                  String sContent = rdFolia.ReadInnerXml();
+                  String sLine = sContent + "\n";
+                  sbThis.Append(sContent);
+                  // Check for StatusInfo
+                  if (bUseNext) {
+                    sbStat.Append(" // "+ sContent );
+                    bUseNext = false;
+                  } else if (General.DoLike(sLine.ToLower(), 
+                    "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*|*ripped*|*download*|*copyright*")) {
+                    // Is this the first one?
+                    if (sbStat.Length > 0) sbStat.Append("\n");
+                    sbStat.Append(sContent);
+                    bUseNext = true;
+                  }
                 }
               }
             } else if (rdFolia.IsStartElement("w")) {
@@ -436,6 +452,7 @@ namespace opsubRpc.util {
         }
         // Create one string from the whole
         String sTotal = sbThis.ToString();
+        sStat = sbStat.ToString();
 
         // =============== DEBUG ===============
         // Store the string into a text file

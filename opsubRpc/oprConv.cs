@@ -150,6 +150,7 @@ namespace opsubRpc {
               oSubt.Subtitle.languageCode = sSubLanguage;
               oSubt.Subtitle.targetCountry = "";        // To be determined later
               oSubt.Subtitle.Date = sSubDate;
+              oSubt.Subtitle.textHash = "";             // similarity hash
               // (2e) Create a licence part
               oSubtiel.Components.SUBTIEL.Subtitle.License = new CMDComponentsSUBTIELSubtitleLicense();
               oSubt.Subtitle.License.LicenseCode = "";  // To be determined
@@ -168,6 +169,7 @@ namespace opsubRpc {
               oSubtiel.Components.SUBTIEL.Subtitle.Author.ResidencePlace = new CMDComponentsSUBTIELSubtitleAuthorResidencePlace();
               oSubt.Subtitle.Author.ResidencePlace.countryCode = "";
               oSubt.Subtitle.Author.ResidencePlace.Town = "";
+
               // TODO: calculate hash and statistics...
 
               // Serialize into output
@@ -222,8 +224,8 @@ namespace opsubRpc {
         if (!util.General.DecompressFile(sFileIn, sFileInXml)) return false;
 
         // Calculate the hash and other information
-        String sHash = ""; int iWords = 0; int iSents = 0;
-        if (!oTools.getXmlStats(sFileInXml, ref sHash, ref iWords, ref iSents)) {
+        String sHash = ""; String sStat = "";  int iWords = 0; int iSents = 0;
+        if (!oTools.getXmlStats(sFileInXml, ref sHash, ref sStat, ref iWords, ref iSents)) {
           errHandle.Status("CalculateHashToCmdi: Could not find statistics for [" + sFileCmdi + "]");
           return false;
         }
@@ -259,6 +261,14 @@ namespace opsubRpc {
             oTools.AddXmlChild(ndxSubtitle, "Statistics",
               "nWords", Convert.ToString(iWords), "child",
               "nSents", Convert.ToString(iSents), "child");
+          }
+          // Add stat info
+          XmlNode ndxInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
+          if (ndxInfo == null) {
+            // Add this information
+            XmlNode ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo",
+              "Status", "evidence", "attribute");
+            ndxStatusInfo.InnerText = sStat;
           }
           // Save the file
           pdxCmdi.Save(sFileCmdi);
@@ -312,14 +322,15 @@ namespace opsubRpc {
           // Get this instance
           SubInstance oOrg = lSubInst[i];
 
-          // ============= DEBUG ===================
+          /* // ============= DEBUG ===================
           if (oOrg.name.Contains("7546")) {
             int iStop = 1;
           }
-          // =======================================
+          // ======================================= */
 
           // Create a JSON object to host details
           Newtonsoft.Json.Linq.JObject oDetails = new Newtonsoft.Json.Linq.JObject();
+          Newtonsoft.Json.Linq.JArray aEvid = new Newtonsoft.Json.Linq.JArray();
           // Does this one have duplicates?
           if (oOrg.lDup.Count>0) {
             // Find the first longest text both in words and sentences
@@ -381,10 +392,20 @@ namespace opsubRpc {
             if (ndxStatusInfo == null) {
               // Create such a child
               ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo", "Status", "", "attribute");
+            } else {
+              // Check if the statusinfo already contains evidence 
+              if (ndxStatusInfo.Attributes["Status"].Value == "evidence") {
+                // Take this evidence
+                String[] arEvid = ndxStatusInfo.InnerText.Split('\n');
+                for (int k=0;k<arEvid.Length;k++) {
+                  aEvid.Add(arEvid[k]);
+                }
+              }
             }
             // Add the information into the status info node
             ndxStatusInfo.Attributes["Status"].Value = oOrg.license;
             // Create a JSON object with status details
+            oDetails["evidence"] = aEvid;
             ndxStatusInfo.InnerText = oDetails.ToString(Newtonsoft.Json.Formatting.None);
           }
           // Save the adapted CMDI
