@@ -128,7 +128,7 @@ namespace opsubRpc {
         foreach (String sFile in arFiles) {
           // What we do here depends on the action identified
           switch(sAction) {
-            case "cmdi":
+            case "cmdi": 
               // Parse this input file to the output directory
               if (!objConv.ConvertOneOpsToCmdi(sFile, ref objMovie, bForce, bIsDebug)) {
                 errHandle.DoError("Main", "Could not convert file [" + sFile + "]");
