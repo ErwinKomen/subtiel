@@ -179,6 +179,7 @@ namespace opsubRpc {
     public int sents;       // Number of sentences
     public List<int> lDup;  // List of duplicates to this one
     public String license;  // The license code for this one
+    public String details;  // Details that can help identify the license
     public SubInstance(String sFile, UInt64 iSimHash, int iWords, int iSents) {
       this.file = sFile;
       this.name = Path.GetFileNameWithoutExtension(sFile);
@@ -187,6 +188,7 @@ namespace opsubRpc {
       this.sents = iSents;
       this.lDup = new List<int>();
       this.license = "";
+      this.details = "";
     }
     public void addDuplicate(int iDup) {
       this.lDup.Add(iDup);

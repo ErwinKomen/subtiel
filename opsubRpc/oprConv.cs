@@ -6,14 +6,16 @@ using System.IO;
 using System.Xml;
 using System.Data;
 using System.Net;
+using Newtonsoft.Json;
 using System.Threading.Tasks;
 
 namespace opsubRpc {
   class oprConv {
     // ================================ LOCAL VARIABLES ===========================================
     private ErrHandle errHandle = null;
-    // private String sCmdiXsd = "https://catalog.clarin.eu/ds/ComponentRegistry/rest/registry/profiles/clarin.eu:cr1:p_1454489235458/xsd";
+    private static string CLARIN_CMDI = "http://www.clarin.eu/cmd/";
     private String sCmdiXsd = "http://erwinkomen.ruhosting.nl/xsd/SUBTIEL.xsd";
+    /*
     private String sCmdiBase = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
         "<CMD xmlns = \"http://www.clarin.eu/cmd/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" CMDVersion=\"1.1\" xsi:schemaLocation=\"http://www.clarin.eu/cmd/ http://catalog.clarin.eu/ds/ComponentRegistry/rest/registry/profiles/clarin.eu:cr1:p_1328259700943/xsd\">" +
         "<Header />" +
@@ -24,6 +26,7 @@ namespace opsubRpc {
         "</Resources>" +
         "<Components><SUBTIEL>" + 
         "</SUBTIEL></Components>";
+        */
     private String sCmdiXsdText = "";
     private util.xmlTools oTools = null;
     private List<MovieHash> lstSimHash = new List<MovieHash>();
@@ -65,8 +68,8 @@ namespace opsubRpc {
         if (!oConv.getFoliaHeader(sFileInXml, ref ndxHeader, ref nsFolia)) return false;
         if (ndxHeader != null) {
           // Get the subtitle id and the idmovie
-          String sIdSubtitle = ndxHeader.SelectSingleNode("./child::f:meta[@class = 'idsubtitle']", nsFolia).InnerText;
-          String sIdMovie = ndxHeader.SelectSingleNode("./child::f:meta[@class = 'idmovie']", nsFolia).InnerText;
+          String sIdSubtitle = ndxHeader.SelectSingleNode("./child::f:meta[@id = 'idsubtitle']", nsFolia).InnerText;
+          String sIdMovie = ndxHeader.SelectSingleNode("./child::f:meta[@id = 'idmovie']", nsFolia).InnerText;
           // Check if we already have information from this idmovie
           XmlNodeList ndxList = null;
           if (objMovie.getInformation(sIdMovie, ref ndxList)) {
@@ -240,7 +243,7 @@ namespace opsubRpc {
           return false;
         } else {
           // Enable access to this PDX within oTools
-          oTools.SetXmlDocument(pdxCmdi, "http://www.clarin.eu/cmd/");
+          oTools.SetXmlDocument(pdxCmdi, CLARIN_CMDI );
           // Kijk of er al een <textHash> element is
           XmlNode ndxTextHash = ndxSubtitle.SelectSingleNode("./child::f:textHash", nsFolia);
           if (ndxTextHash == null) {
@@ -298,6 +301,8 @@ namespace opsubRpc {
             if (iHdist <= iGoodHd) {
               // So this is probably a duplicate of me -- add it
               lSubInst[i].addDuplicate(j);
+              // Also add me to the list of the other one
+              lSubInst[j].addDuplicate(i);
             }
           }
         }
@@ -306,6 +311,15 @@ namespace opsubRpc {
         for (int i = 0; i < lSubInst.Count; i++) {
           // Get this instance
           SubInstance oOrg = lSubInst[i];
+
+          // ============= DEBUG ===================
+          if (oOrg.name.Contains("7546")) {
+            int iStop = 1;
+          }
+          // =======================================
+
+          // Create a JSON object to host details
+          Newtonsoft.Json.Linq.JObject oDetails = new Newtonsoft.Json.Linq.JObject();
           // Does this one have duplicates?
           if (oOrg.lDup.Count>0) {
             // Find the first longest text both in words and sentences
@@ -323,15 +337,58 @@ namespace opsubRpc {
             }
             // Check what the longest is; that's the most 'original'
             if (iLongest<0) {
+              // Prepare a list of similars
+              Newtonsoft.Json.Linq.JArray aSimilar = new Newtonsoft.Json.Linq.JArray();
               // The [oOrg] is the longest
               oOrg.license = "largest";
+              oDetails["link"] = "this";
+              // Create a list of similar ones
+              for (int j = 0; j < oOrg.lDup.Count; j++) {
+                aSimilar.Add(lSubInst[oOrg.lDup[j]].name);
+              }
+              // Add the list of similar ones
+              oDetails["similar"] = aSimilar;
             } else {
               // Another one is the longest
-              oOrg.license = "copy of [" + lSubInst[iLongest].name + "]";
+              oOrg.license = "copy";
+              oDetails["link"] = lSubInst[iLongest].name;
             }
           } else {
             oOrg.license = "unique";
+            oDetails["link"] = "none";
           }
+          // Adapt the .cmdi.xml file for this item
+          String sFileCmdi = oOrg.file.Replace(".folia.xml", ".cmdi.xml");
+          // Do we need to continue?
+          if (!File.Exists(sFileCmdi)) {
+            // If the CMDI file does not exist, we cannot adapt it
+            // It is not really an error, but we should give a warning
+            errHandle.Status("findDuplicates: skipping non-existent [" + sFileCmdi + "]");
+            return true;
+          }
+          // Read the CMDI
+          XmlDocument pdxCmdi = new XmlDocument();
+          pdxCmdi.Load(sFileCmdi);
+          oTools.SetXmlDocument(pdxCmdi, CLARIN_CMDI);
+          // Get correct namespace manager
+          XmlNamespaceManager nsFolia = new XmlNamespaceManager(pdxCmdi.NameTable);
+          nsFolia.AddNamespace("f", pdxCmdi.DocumentElement.NamespaceURI);
+          // Zoek het <Subtitle> element 
+          XmlNode ndxSubtitle = pdxCmdi.SelectSingleNode("./descendant::f:Subtitle", nsFolia);
+          if (ndxSubtitle != null) {
+            // Check if there is a statusinfo child
+            XmlNode ndxStatusInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
+            if (ndxStatusInfo == null) {
+              // Create such a child
+              ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo", "Status", "", "attribute");
+            }
+            // Add the information into the status info node
+            ndxStatusInfo.Attributes["Status"].Value = oOrg.license;
+            // Create a JSON object with status details
+            ndxStatusInfo.InnerText = oDetails.ToString(Newtonsoft.Json.Formatting.None);
+          }
+          // Save the adapted CMDI
+          pdxCmdi.Save(sFileCmdi);
         }
 
         // Return positively

@@ -1349,6 +1349,8 @@ public partial class CMDComponentsSUBTIELSubtitle {
     
     private string textHashField;
     
+    private CMDComponentsSUBTIELSubtitleStatusInfo statusInfoField;
+    
     private CMDComponentsSUBTIELSubtitleStatistics statisticsField;
     
     private CMDComponentsSUBTIELSubtitleLicense licenseField;
@@ -1414,6 +1416,16 @@ public partial class CMDComponentsSUBTIELSubtitle {
     }
     
     /// <opmerkingen/>
+    public CMDComponentsSUBTIELSubtitleStatusInfo StatusInfo {
+        get {
+            return this.statusInfoField;
+        }
+        set {
+            this.statusInfoField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
     public CMDComponentsSUBTIELSubtitleStatistics Statistics {
         get {
             return this.statisticsField;
@@ -1462,6 +1474,41 @@ public partial class CMDComponentsSUBTIELSubtitle {
         }
         set {
             this.componentIdField = value;
+        }
+    }
+}
+
+/// <opmerkingen/>
+[System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "2.0.50727.3038")]
+[System.SerializableAttribute()]
+[System.Diagnostics.DebuggerStepThroughAttribute()]
+[System.ComponentModel.DesignerCategoryAttribute("code")]
+[System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true, Namespace="http://www.clarin.eu/cmd/")]
+public partial class CMDComponentsSUBTIELSubtitleStatusInfo {
+    
+    private string statusField;
+    
+    private string valueField;
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlAttributeAttribute()]
+    public string Status {
+        get {
+            return this.statusField;
+        }
+        set {
+            this.statusField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlTextAttribute()]
+    public string Value {
+        get {
+            return this.valueField;
+        }
+        set {
+            this.valueField = value;
         }
     }
 }
