@@ -49,6 +49,14 @@ namespace opsubRpc {
       try {
         // Validate
         if (!File.Exists(sFileIn)) return false;
+
+        // Check if this is a symbolic link
+        if (File.GetAttributes(sFileIn).HasFlag(FileAttributes.ReparsePoint) || 
+          !util.General.CanReadFile(sFileIn)) {
+          // The input file is a symbolic link --> skip it, because it should already have been done
+          return true;
+        }
+
         // Get the output directory
         String sDirOut = Path.GetDirectoryName(sFileIn);
 
