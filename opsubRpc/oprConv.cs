@@ -179,6 +179,12 @@ namespace opsubRpc {
               oSubt.Subtitle.Author.ResidencePlace.Town = "";
 
               // TODO: calculate hash and statistics...
+              oSubtiel.Components.SUBTIEL.Subtitle.Statistics = new CMDComponentsSUBTIELSubtitleStatistics();
+              oSubt.Subtitle.Statistics.nSentences = 0;
+              oSubt.Subtitle.Statistics.nWords = 0;
+
+              oSubtiel.Components.SUBTIEL.Subtitle.StatusInfo = new CMDComponentsSUBTIELSubtitleStatusInfo();
+              oSubt.Subtitle.StatusInfo.link = "none";
 
               // Serialize into output
               var serializer = new System.Xml.Serialization.XmlSerializer(typeof(CMD));
@@ -241,8 +247,9 @@ namespace opsubRpc {
         if (!util.General.DecompressFile(sFileIn, sFileInXml)) return false;
 
         // Calculate the hash and other information
-        String sHash = ""; String sStat = "";  int iWords = 0; int iSents = 0;
-        if (!oTools.getXmlStats(sFileInXml, ref sHash, ref sStat, ref iWords, ref iSents)) {
+        String sHash = ""; int iWords = 0; int iSents = 0;
+        List<String> lStat = new List<string>();
+        if (!oTools.getXmlStats(sFileInXml, ref sHash, lStat, ref iWords, ref iSents)) {
           errHandle.Status("CalculateHashToCmdi: Could not find statistics for [" + sFileCmdi + "]");
           return false;
         }
@@ -284,8 +291,15 @@ namespace opsubRpc {
           if (ndxInfo == null) {
             // Add this information
             XmlNode ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo",
-              "Status", "evidence", "attribute");
-            ndxStatusInfo.InnerText = sStat;
+              "link", "none", "attribute");
+            // Add all the evidence
+            int iEvidId = 1;
+            for (int i=0;i<lStat.Count;i++) {
+              XmlNode ndxEvid = oTools.AddXmlChild(ndxStatusInfo, "Evidence",
+                "EvidenceId", Convert.ToString( iEvidId), "attribute");
+              ndxEvid.InnerText = lStat[i];
+            }
+            // ndxStatusInfo.InnerText = sStat;
           }
           // Save the file
           pdxCmdi.Save(sFileCmdi);
@@ -346,8 +360,14 @@ namespace opsubRpc {
           // ======================================= */
 
           // Create a JSON object to host details
-          Newtonsoft.Json.Linq.JObject oDetails = new Newtonsoft.Json.Linq.JObject();
-          Newtonsoft.Json.Linq.JArray aEvid = new Newtonsoft.Json.Linq.JArray();
+          // Newtonsoft.Json.Linq.JObject oDetails = new Newtonsoft.Json.Linq.JObject();
+          // Newtonsoft.Json.Linq.JArray aEvid = new Newtonsoft.Json.Linq.JArray();
+
+          // Initialisations
+          String sLink = "";
+          List<String> lSimilar = new List<string>();
+          List<String> lEvid = new List<string>();
+
           // Does this one have duplicates?
           if (oOrg.lDup.Count>0) {
             // Find the first longest text both in words and sentences
@@ -369,21 +389,25 @@ namespace opsubRpc {
               Newtonsoft.Json.Linq.JArray aSimilar = new Newtonsoft.Json.Linq.JArray();
               // The [oOrg] is the longest
               oOrg.license = "largest";
-              oDetails["link"] = "this";
+              // oDetails["link"] = "this";
+              sLink = "this";
               // Create a list of similar ones
               for (int j = 0; j < oOrg.lDup.Count; j++) {
-                aSimilar.Add(lSubInst[oOrg.lDup[j]].name);
+                // aSimilar.Add(lSubInst[oOrg.lDup[j]].name);
+                lSimilar.Add(lSubInst[oOrg.lDup[j]].name);
               }
               // Add the list of similar ones
-              oDetails["similar"] = aSimilar;
+              // oDetails["similar"] = aSimilar;
             } else {
               // Another one is the longest
               oOrg.license = "copy";
-              oDetails["link"] = lSubInst[iLongest].name;
+              // oDetails["link"] = lSubInst[iLongest].name;
+              sLink = lSubInst[iLongest].name;
             }
           } else {
             oOrg.license = "unique";
-            oDetails["link"] = "none";
+            // oDetails["link"] = "none";
+            sLink = "none";
           }
           // Adapt the .cmdi.xml file for this item
           String sFileCmdi = oOrg.file.Replace(".folia.xml", ".cmdi.xml");
@@ -410,6 +434,12 @@ namespace opsubRpc {
               // Create such a child
               ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo", "Status", "", "attribute");
             } else {
+              // Get any status info evidence there is
+              XmlNode ndxEvid = ndxStatusInfo.SelectSingleNode("./child::f:Evidence", nsFolia);
+              while (ndxEvid != null) {
+                lEvid.Add(ndxEvid.InnerText);
+              }
+              /*
               // Check if the statusinfo already contains evidence 
               if (ndxStatusInfo.Attributes["Status"].Value == "evidence") {
                 // Take this evidence
@@ -417,13 +447,19 @@ namespace opsubRpc {
                 for (int k=0;k<arEvid.Length;k++) {
                   aEvid.Add(arEvid[k]);
                 }
-              }
+              }*/
             }
             // Add the information into the status info node
-            ndxStatusInfo.Attributes["Status"].Value = oOrg.license;
+            ndxStatusInfo.Attributes["status"].Value = oOrg.license;
+            ndxStatusInfo.Attributes["link"].Value = sLink;
+            // Add any links
+            for (int i=0;i<lSimilar.Count;i++) {
+              XmlNode ndxSimi = oTools.AddXmlChild(ndxStatusInfo, "Similar");
+              ndxSimi.InnerText = lSimilar[i];
+            }
             // Create a JSON object with status details
-            oDetails["evidence"] = aEvid;
-            ndxStatusInfo.InnerText = oDetails.ToString(Newtonsoft.Json.Formatting.None);
+            // oDetails["evidence"] = aEvid;
+            // ndxStatusInfo.InnerText = oDetails.ToString(Newtonsoft.Json.Formatting.None);
           }
           // Save the adapted CMDI
           pdxCmdi.Save(sFileCmdi);

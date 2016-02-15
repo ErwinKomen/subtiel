@@ -395,7 +395,7 @@ namespace opsubRpc.util {
     // History:
     // 04-02-2016  ERK Created
     // ------------------------------------------------------------------------------------------------------------
-    public bool getXmlStats(String sFileIn, ref String sSimHash, ref String sStat,
+    public bool getXmlStats(String sFileIn, ref String sSimHash, List<String> lStat,
       ref int iWords, ref int iSents) {
       String sMethod = "simhash";
 
@@ -429,7 +429,10 @@ namespace opsubRpc.util {
                   // Check for StatusInfo
                   if (bUseNext) {
                     sbStat.Append(" // "+ sContent );
-                    bUseNext = false;
+                    // Add to the list of statusinfo evidence
+                    lStat.Add(sbStat.ToString());
+                    sbStat.Clear();
+                    // bUseNext = false;
                   } else if (General.DoLike(sLine.ToLower(), 
                     "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*|*ripped*|*download*|*copyright*")) {
                     // Is this the first one?
@@ -452,7 +455,7 @@ namespace opsubRpc.util {
         }
         // Create one string from the whole
         String sTotal = sbThis.ToString();
-        sStat = sbStat.ToString();
+        // sStat = sbStat.ToString();
 
         // =============== DEBUG ===============
         // Store the string into a text file
