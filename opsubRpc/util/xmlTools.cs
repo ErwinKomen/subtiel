@@ -425,14 +425,14 @@ namespace opsubRpc.util {
                   // Correct attribute: read the node
                   String sContent = rdFolia.ReadInnerXml();
                   String sLine = sContent + "\n";
-                  sbThis.Append(sContent);
+                  sbThis.Append(sLine);
                   // Check for StatusInfo
                   if (bUseNext) {
                     sbStat.Append(" // "+ sContent );
                     // Add to the list of statusinfo evidence
                     lStat.Add(sbStat.ToString());
                     sbStat.Clear();
-                    // bUseNext = false;
+                    bUseNext = false;
                   } else if (General.DoLike(sLine.ToLower(), 
                     "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*|*ripped*|*download*|*copyright*")) {
                     // Is this the first one?

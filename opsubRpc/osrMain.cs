@@ -72,6 +72,7 @@ namespace opsubRpc {
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
         }
         // Calculate for each file which others are close to it
+        // Also try to determine the license information for the best matching .cmdi.xml files.
         objConv.findDuplicates(ref lSubInst, 3);
 
         // Create an overview - if required

@@ -6,7 +6,7 @@ using System.IO;
 using System.Xml;
 using System.Data;
 using System.Net;
-using Newtonsoft.Json;
+// using Newtonsoft.Json;
 using System.Threading.Tasks;
 
 namespace opsubRpc {
@@ -288,18 +288,22 @@ namespace opsubRpc {
           }
           // Add stat info
           XmlNode ndxInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
-          if (ndxInfo == null) {
-            // Add this information
-            XmlNode ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo",
-              "link", "none", "attribute");
-            // Add all the evidence
-            int iEvidId = 1;
-            for (int i=0;i<lStat.Count;i++) {
-              XmlNode ndxEvid = oTools.AddXmlChild(ndxStatusInfo, "Evidence",
-                "EvidenceId", Convert.ToString( iEvidId), "attribute");
-              ndxEvid.InnerText = lStat[i];
-            }
-            // ndxStatusInfo.InnerText = sStat;
+          if (ndxInfo != null) {
+            // Remove the existing one
+            ndxInfo.RemoveAll();
+            ndxSubtitle.RemoveChild(ndxInfo);
+          }
+          // Add this information
+          XmlNode ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo",
+            "link", "none", "attribute",
+            "status", "", "attribute");
+          // Add all the evidence
+          int iEvidId = 1;
+          for (int i=0;i<lStat.Count;i++) {
+            XmlNode ndxEvid = oTools.AddXmlChild(ndxStatusInfo, "Evidence",
+              "EvidenceId", Convert.ToString( iEvidId), "attribute");
+            ndxEvid.InnerText = lStat[i];
+          iEvidId += 1;
           }
           // Save the file
           pdxCmdi.Save(sFileCmdi);
@@ -353,16 +357,6 @@ namespace opsubRpc {
           // Get this instance
           SubInstance oOrg = lSubInst[i];
 
-          /* // ============= DEBUG ===================
-          if (oOrg.name.Contains("7546")) {
-            int iStop = 1;
-          }
-          // ======================================= */
-
-          // Create a JSON object to host details
-          // Newtonsoft.Json.Linq.JObject oDetails = new Newtonsoft.Json.Linq.JObject();
-          // Newtonsoft.Json.Linq.JArray aEvid = new Newtonsoft.Json.Linq.JArray();
-
           // Initialisations
           String sLink = "";
           List<String> lSimilar = new List<string>();
@@ -385,28 +379,22 @@ namespace opsubRpc {
             }
             // Check what the longest is; that's the most 'original'
             if (iLongest<0) {
-              // Prepare a list of similars
-              Newtonsoft.Json.Linq.JArray aSimilar = new Newtonsoft.Json.Linq.JArray();
               // The [oOrg] is the longest
               oOrg.license = "largest";
-              // oDetails["link"] = "this";
               sLink = "this";
               // Create a list of similar ones
               for (int j = 0; j < oOrg.lDup.Count; j++) {
                 // aSimilar.Add(lSubInst[oOrg.lDup[j]].name);
                 lSimilar.Add(lSubInst[oOrg.lDup[j]].name);
               }
-              // Add the list of similar ones
-              // oDetails["similar"] = aSimilar;
             } else {
               // Another one is the longest
               oOrg.license = "copy";
-              // oDetails["link"] = lSubInst[iLongest].name;
               sLink = lSubInst[iLongest].name;
             }
           } else {
+            // This is a unique subtitle file
             oOrg.license = "unique";
-            // oDetails["link"] = "none";
             sLink = "none";
           }
           // Adapt the .cmdi.xml file for this item
@@ -432,38 +420,86 @@ namespace opsubRpc {
             XmlNode ndxStatusInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
             if (ndxStatusInfo == null) {
               // Create such a child
-              ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo", "Status", "", "attribute");
+              ndxStatusInfo = oTools.AddXmlChild(ndxSubtitle, "StatusInfo", 
+                "status", "", "attribute",
+                "link", "", "attribute");
             } else {
               // Get any status info evidence there is
               XmlNode ndxEvid = ndxStatusInfo.SelectSingleNode("./child::f:Evidence", nsFolia);
               while (ndxEvid != null) {
                 lEvid.Add(ndxEvid.InnerText);
+                ndxEvid = ndxEvid.SelectSingleNode("./following-sibling::f:Evidence", nsFolia);
               }
-              /*
-              // Check if the statusinfo already contains evidence 
-              if (ndxStatusInfo.Attributes["Status"].Value == "evidence") {
-                // Take this evidence
-                String[] arEvid = ndxStatusInfo.InnerText.Split('\n');
-                for (int k=0;k<arEvid.Length;k++) {
-                  aEvid.Add(arEvid[k]);
-                }
-              }*/
             }
             // Add the information into the status info node
             ndxStatusInfo.Attributes["status"].Value = oOrg.license;
             ndxStatusInfo.Attributes["link"].Value = sLink;
             // Add any links
-            for (int i=0;i<lSimilar.Count;i++) {
-              XmlNode ndxSimi = oTools.AddXmlChild(ndxStatusInfo, "Similar");
-              ndxSimi.InnerText = lSimilar[i];
+            for (int j=0;j<lSimilar.Count;j++) {
+              XmlNode ndxSimi = oTools.AddXmlChild(ndxStatusInfo, "Similar",
+                "SimilarId", Convert.ToString(j+1), "attribute");
+              ndxSimi.InnerText = Path.GetFileNameWithoutExtension( lSimilar[j]);
             }
-            // Create a JSON object with status details
-            // oDetails["evidence"] = aEvid;
-            // ndxStatusInfo.InnerText = oDetails.ToString(Newtonsoft.Json.Formatting.None);
+            // Try to find out more information, depending on the status we have found
+            switch (oOrg.license) {
+              case "largest":
+              case "unique":
+                bool bCopyright = false;
+                bool bTranslated = false;
+                bool bDownload = false;
+                String sDetails = "";
+                // Walk through all evidence
+                for (int j=0; j<lEvid.Count;j++) {
+                  // Get this evidence
+                  String sEvid = lEvid[j].ToLower();
+                  // Check for RIP information
+                  // "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*|*ripped*|*download*|*copyright*"
+                  if (util.General.DoLike(sEvid, "*ripped*|*copyright*")) {
+                    // Add the copyright information as evidence if it is necessary
+                    if (bTranslated || bDownload || !bCopyright) sDetails = sEvid;
+                    bCopyright = true;
+                  } else if (util.General.DoLike(sEvid, "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*")) {
+                    bTranslated = true;
+                    if (sDetails == "" || bDownload) sDetails = sEvid;
+                  } else if (util.General.DoLike(sEvid, "*download*")) {
+                    bDownload = true;
+                    if (sDetails == "") sDetails = sEvid;
+                  }
+                }
+                // Determine license status from the combination of the three booleans
+                if (bCopyright || bTranslated || bDownload) {
+                  // We should be able to determine the license information
+                  String sLicense = "";
+                  if (bCopyright)
+                    sLicense = "copyright";
+                  else if (bTranslated)
+                    sLicense = "translation";
+                  else if (bDownload)
+                    sLicense = "download";
+                  // Find the location where we are going to put this information
+                  XmlNode ndxLicenseType = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseType", nsFolia);
+                  ndxLicenseType.InnerText = sLicense;
+                  XmlNode ndxLicenseDetails = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseDetails", nsFolia);
+                  ndxLicenseDetails.InnerText = sDetails;
+                } else {
+                  // There is no copyright/translated/download information: check if we can determine the license
+                  //    information in another way
+                  // (1) Look at Subtitle/Author/UserClass
+                  
+                  // (2)  
+                }
+                break;
+              default:
+                // No further license determination is needed, since this is a copy 
+                break;
+            }
           }
           // Save the adapted CMDI
           pdxCmdi.Save(sFileCmdi);
+          // Show where we are
+          errHandle.Status("findDuplicates:\t["+ oOrg.name+"]\t[" + oOrg.license+"/"+sLink + "]");
         }
+
 
         // Return positively
         return true;
