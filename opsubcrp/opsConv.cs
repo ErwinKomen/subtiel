@@ -6,6 +6,7 @@ using System.Xml;
 using System.IO;
 using System.Threading.Tasks;
 using opsubcrp.conv;
+using System.Text.RegularExpressions;
 
 namespace opsubcrp {
   /* -------------------------------------------------------------------------------------
@@ -71,8 +72,33 @@ namespace opsubcrp {
         int iSubtitle = 0;  // Default subtitles.org number
         if (iUs >=0) { 
           sBare = sBare.Substring(0, iUs);
+          // Get to the second part
+          String sSecond = sFileName.Substring(iUs + 1);
+          // Find two numbers there
+          Match mcOne = Regex.Match(sSecond, "\\d+");
+          if (!mcOne.Success) {
+            errHandle.DoError("ConvertOneOpsToFolia","cannot get number from ["+sSecond+"]");
+            return false;
+          }
+          // Get first number
+          iVersion = Convert.ToInt32(mcOne.Value);
+          // Go to next number
+          mcOne = mcOne.NextMatch();
+          if (!mcOne.Success) {
+            errHandle.DoError("ConvertOneOpsToFolia", "cannot get number from [" + sSecond + "]");
+            return false;
+          }
+          iMax = Convert.ToInt32(mcOne.Value);
+          /*
           iVersion = Convert.ToInt32(sFileName.Substring(iUs + 1, 1));
           iMax = Convert.ToInt32(sFileName.Substring(iUs + 4, 1));
+          */
+        }
+
+        // Check if we need to continue
+        if (!bForce && iMax == 1) {
+          debug("Skipping: " + sFileIn);
+          return true;
         }
 
         UInt64 iNumber;
@@ -110,7 +136,7 @@ namespace opsubcrp {
         // Create a temporary folia output file with the bare essentials
         String sFileTmpF = sFileOut + ".tmp";
         // Bare folia text
-        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, sMovieName, sMovieYear, iSubtitle, iVersion) +
+        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, sMovieName, sMovieYear, iSubtitle, iVersion, iMax) +
           objOpsFolia.getExtro();
         // Write this text to a file
         XmlDocument pdxBareF = new XmlDocument();
@@ -129,6 +155,15 @@ namespace opsubcrp {
         bool bStart = false;    // This word has the time-start marker
         bool bEnd = false;      // This word has the time-end marker
 
+        // Determine the file name template we will be looking for
+        String sFileInTemplate = sFileName.Replace("1of" + iMax, "*of" + iMax) + ".gz";
+        // Get all the files fulfilling this template
+        String[] arFileIn = Directory.GetFiles(Path.GetDirectoryName(sFileIn), sFileInTemplate, SearchOption.TopDirectoryOnly);
+        // Make sure the files are sorted correctly
+        List<String> lFileIn = arFileIn.ToList<String>();
+        lFileIn.Sort();
+        int iFile = 0;    // Number of the file from the [lFileIn] list
+
         // (3) Open the bare FoLiA file for input
         using (StreamReader rdFileTmpF = new StreamReader(sFileTmpF))
         using (XmlReader rdFolia = XmlReader.Create(rdFileTmpF))
@@ -145,136 +180,130 @@ namespace opsubcrp {
               // (8) Do make sure that we WRITE the start element away
               WriteShallowNode(rdFolia, wrFolia);
 
-              // Determine the file name template we will be looking for
-              String sFileInTemplate = sFileName.Replace("1of" + iMax, "?of" + iMax) + ".gz";
-              // Get all the files fulfilling this template
-              String[] arFileIn = Directory.GetFiles(Path.GetDirectoryName(sFileIn), sFileInTemplate, SearchOption.TopDirectoryOnly);
-              // Make sure the files are sorted correctly
-              List<String> lFileIn = arFileIn.ToList<String>();
-              lFileIn.Sort();
-              // Walk all .xml.gz files belonging to this subtitle
-              for (int f = 0; f < lFileIn.Count; f++) {
-                // Determine a temporary file name
-                String sFileTmp = lFileIn[f].Replace(".xml.gz", "xml");
-                // Unzip the file
-                if (!util.General.DecompressFile(lFileIn[f], sFileTmp)) return false;
+              // Retrieve the next input file from the list
+              String sFileTmp = lFileIn[iFile].Replace(".xml.gz", "xml");
+              // Unzip the file
+              if (!util.General.DecompressFile(lFileIn[iFile], sFileTmp)) return false;
 
-                // (4) Open the open-subtitle xml file for input
-                using (StreamReader rdFileTmp = new StreamReader(sFileTmp))
-                using (XmlReader rdOps = XmlReader.Create(rdFileTmp)) {
-                  // (9) Walk through the *actual* open-subtitle input file
-                  while (!rdOps.EOF && rdOps.Read()) {
-                    // (10) Check what this is
-                    if (rdOps.IsStartElement("s")) {
-                      // Read the <s> element as one string
-                      String sWholeS = rdOps.ReadOuterXml();
-                      iSentNum++;
-                      // Process the <s> element:
-                      // (1) put it into an XmlDocument
-                      XmlDocument pdxSrc = new XmlDocument();
-                      pdxSrc.LoadXml(sWholeS);
-                      // (2) Create a namespace mapping for the opensubtitles *source* xml document
-                      XmlNamespaceManager nsOps = new XmlNamespaceManager(pdxSrc.NameTable);
-                      nsOps.AddNamespace("df", pdxSrc.DocumentElement.NamespaceURI);
-                      // (3) Create a sentence identifier
-                      String sSentId = sBare + ".p.1.s." + iSentNum;
-                      // (4) The first <s> should at least have some <w> elements
-                      if (iSentNum == 1) {
-                        // Check out first sentence
-                        if (pdxSrc.SelectSingleNode("./descendant::df:w", nsOps) == null) {
-                          // Skip this file -- it contains RAW info, no <w> elements
-                          return true;
-                        }
+              // Increment the file number for the next run and reset the sentence number
+              iFile += 1; iSentNum = 0;
+
+              // (4) Open the open-subtitle xml file for input
+              using (StreamReader rdFileTmp = new StreamReader(sFileTmp))
+              using (XmlReader rdOps = XmlReader.Create(rdFileTmp)) {
+                // (9) Walk through the *actual* open-subtitle input file
+                while (!rdOps.EOF && rdOps.Read()) {
+                  // (10) Check what this is
+                  if (rdOps.IsStartElement("s")) {
+                    // Read the <s> element as one string
+                    String sWholeS = rdOps.ReadOuterXml();
+                    iSentNum++;
+                    // Process the <s> element:
+                    // (1) put it into an XmlDocument
+                    XmlDocument pdxSrc = new XmlDocument();
+                    pdxSrc.LoadXml(sWholeS);
+                    // (2) Create a namespace mapping for the opensubtitles *source* xml document
+                    XmlNamespaceManager nsOps = new XmlNamespaceManager(pdxSrc.NameTable);
+                    nsOps.AddNamespace("df", pdxSrc.DocumentElement.NamespaceURI);
+                    // (3) Create a sentence identifier
+                    String sSentId = sBare + ".p."+iFile+".s." + iSentNum;
+                    // (4) The first <s> should at least have some <w> elements
+                    if (iSentNum == 1) {
+                      // Check out first sentence
+                      if (pdxSrc.SelectSingleNode("./descendant::df:w", nsOps) == null) {
+                        // Skip this file -- it contains RAW info, no <w> elements
+                        return true;
                       }
-                      // (5) Create a new sentence in the buffer
-                      Sent oSent = new Sent(sSentId);
-                      lSentBuf.Add(oSent);
-                      // (6) Process all *descendants* of this <s> one-by-one
-                      XmlNodeList ndChild = pdxSrc.SelectNodes("./descendant-or-self::df:s/descendant::df:*", nsOps);
-                      int iWord = 0;
-                      for (int i = 0; i < ndChild.Count; i++) {
-                        // Get this child
-                        XmlNode ndThis = ndChild.Item(i);
-                        // Action depends on the type of child this is
-                        switch (ndThis.Name) {
-                          case "time":
-                            // Get the time id and value
-                            String sTimeId = ndThis.Attributes["id"].Value;
-                            String sTimeVal = ndThis.Attributes["value"].Value;
-                            // Is this the *start* or *end* time?
-                            if (sTimeId.EndsWith("S")) {
-                              // Keep track of the latest *start* time and reset the end time
-                              sTimeStart = sTimeVal; sTimeEnd = ""; bStart = true;
-                              // Get the SRT line number
-                              sLineSrt = sTimeId.Substring(1, sTimeId.Length - 2);
-                            } else {
-                              // Add the end-time
-                              sTimeEnd = sTimeVal;
-                              // Reset the starting time
-                              sTimeStart = "";
-                              bEnd = true;
-                              if (bEnd) {
-                                // Reset flag
-                                bEnd = false;
-                                // Add mark for starting
-                                lSentBuf[lSentBuf.Count - 1].markEnd();
-                              }
-                              // Process the sentence buffer
-                              // (a) Process all previous sentences
-                              int iCount = lSentBuf.Count;
-                              if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd)) {
-                                return false;
-                              }
-                              // (b) Process the words in the current sentence
-                              List<WordBuf> lCurrent = lSentBuf[lSentBuf.Count - 1].words;
-                              for (int j = 0; j < lCurrent.Count; j++) {
-                                // Check if this word needs to have an end-time
-                                if (lCurrent[j].e == "") lCurrent[j].e = sTimeEnd;
-                              }
-                            }
-                            break;
-                          case "i": // Some have an <i> tag to indicate what goes on one line: ignore
-                            break;
-                          case "w":
-                            // Process this word
-                            iWord++;
-                            // Get the text of this word
-                            String sWord = ndThis.InnerText;
-                            // Create an identifier for this word
-                            // String sWordId = sSentId + ".w." + iWord;
-                            String sWordCl = (util.General.DoLike(sWord, ".|,|...|..|-|?|!|\"|'|:|;|(|)")) ? "Punct" : "Vern";
-                            // Add this word to the buffer of this current sentence
-                            lSentBuf[lSentBuf.Count - 1].addWord(sWord, sWordCl);
-                            // Add the start-time to this word
-                            lSentBuf[lSentBuf.Count - 1].addStart(sTimeStart);
-                            // Add the SRT number to this word
-                            lSentBuf[lSentBuf.Count - 1].addLine(sLineSrt);
-                            if (bStart) {
+                    }
+                    // (5) Create a new sentence in the buffer
+                    Sent oSent = new Sent(sSentId);
+                    lSentBuf.Add(oSent);
+                    // (6) Process all *descendants* of this <s> one-by-one
+                    XmlNodeList ndChild = pdxSrc.SelectNodes("./descendant-or-self::df:s/descendant::df:*", nsOps);
+                    int iWord = 0;
+                    for (int i = 0; i < ndChild.Count; i++) {
+                      // Get this child
+                      XmlNode ndThis = ndChild.Item(i);
+                      // Action depends on the type of child this is
+                      switch (ndThis.Name) {
+                        case "time":
+                          // Get the time id and value
+                          String sTimeId = ndThis.Attributes["id"].Value;
+                          String sTimeVal = ndThis.Attributes["value"].Value;
+                          // Is this the *start* or *end* time?
+                          if (sTimeId.EndsWith("S")) {
+                            // Keep track of the latest *start* time and reset the end time
+                            sTimeStart = sTimeVal; sTimeEnd = ""; bStart = true;
+                            // Get the SRT line number
+                            sLineSrt = sTimeId.Substring(1, sTimeId.Length - 2);
+                          } else {
+                            // Add the end-time
+                            sTimeEnd = sTimeVal;
+                            // Reset the starting time
+                            sTimeStart = "";
+                            bEnd = true;
+                            if (bEnd) {
                               // Reset flag
-                              bStart = false;
+                              bEnd = false;
                               // Add mark for starting
-                              lSentBuf[lSentBuf.Count - 1].markStart();
+                              lSentBuf[lSentBuf.Count - 1].markEnd();
                             }
+                            // Process the sentence buffer
+                            // (a) Process all previous sentences
+                            int iCount = lSentBuf.Count;
+                            if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd)) {
+                              return false;
+                            }
+                            // (b) Process the words in the current sentence
+                            List<WordBuf> lCurrent = lSentBuf[lSentBuf.Count - 1].words;
+                            for (int j = 0; j < lCurrent.Count; j++) {
+                              // Check if this word needs to have an end-time
+                              if (lCurrent[j].e == "") lCurrent[j].e = sTimeEnd;
+                            }
+                          }
+                          break;
+                        case "i": // Some have an <i> tag to indicate what goes on one line: ignore
+                          break;
+                        case "w":
+                          // Process this word
+                          iWord++;
+                          // Get the text of this word
+                          String sWord = ndThis.InnerText;
+                          // Create an identifier for this word
+                          // String sWordId = sSentId + ".w." + iWord;
+                          String sWordCl = (util.General.DoLike(sWord, ".|,|...|..|-|?|!|\"|'|:|;|(|)")) ? "Punct" : "Vern";
+                          // Add this word to the buffer of this current sentence
+                          lSentBuf[lSentBuf.Count - 1].addWord(sWord, sWordCl);
+                          // Add the start-time to this word
+                          lSentBuf[lSentBuf.Count - 1].addStart(sTimeStart);
+                          // Add the SRT number to this word
+                          lSentBuf[lSentBuf.Count - 1].addLine(sLineSrt);
+                          if (bStart) {
+                            // Reset flag
+                            bStart = false;
+                            // Add mark for starting
+                            lSentBuf[lSentBuf.Count - 1].markStart();
+                          }
 
-                            break;
-                          default:
-                            // No idea what to do here -- just skip??
-                            break;
-                        }
+                          break;
+                        default:
+                          // No idea what to do here -- just skip??
+                          break;
                       }
                     }
-                  }   // End while
-                  // Process any remaining sentences
-                  if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd)) {
-                    return false;
                   }
-                  rdOps.Close();    // rdOps.Dispose();
-                  rdFileTmp.Close();
-                  // Remove the temporary file
-                  File.Delete(sFileTmp);
+                }   // End while
+                // Process any remaining sentences
+                if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd)) {
+                  return false;
                 }
-
+                rdOps.Close();    // rdOps.Dispose();
+                rdFileTmp.Close();
+                // Remove the temporary file
+                File.Delete(sFileTmp);
               }
+
+              // }
             } else {
               // Process reading the input
               WriteShallowNode(rdFolia, wrFolia);
@@ -288,163 +317,6 @@ namespace opsubcrp {
           // debug("Point 4: locked = " + util.General.IsFileLocked(sFileTmp));
         }
         
-        /*
-        // debug("Point 1: locked = " + util.General.IsFileLocked(sFileTmp));
-        // Unzip the input file to the temporary file
-        if (iMax == 1) {
-          if (!util.General.DecompressFile(sFileIn, sFileTmp)) return false;
-        } else {
-          // Need to decompress several files
-          for (int i = 1; i <= iMax; i++) {
-            String sFileInPart = sFileBase.Replace("1of"+iMax, i+"of"+iMax);
-            // Decompress this file
-            FileMode fmThis = (i == 1) ? FileMode.Create : FileMode.Append;
-            if (!util.General.DecompressFile(sFileInPart, sFileTmp, fmThis)) return false;
-          }
-        }
-        // debug("Point 2: locked = " + util.General.IsFileLocked(sFileTmp));
-        */
-
-        /*
-
-        // (4) Open the open-subtitle xml file for input
-        using (StreamReader rdFileTmp = new StreamReader(sFileTmp))
-        using (XmlReader rdOps = XmlReader.Create(rdFileTmp))
-
- {
-          // (6) Walk through the bare folia input file
-          while (!rdFolia.EOF && rdFolia.Read()) {
-            // (7) Check what kind of input this is
-            // Note: we need to pause after reading the <p> start element
-            if (rdFolia.IsStartElement("p")) {
-              // (8) Do make sure that we WRITE the start element away
-              WriteShallowNode(rdFolia, wrFolia);
-              // (9) Walk through the *actual* open-subtitle input file
-              while (!rdOps.EOF && rdOps.Read()) {
-                // (10) Check what this is
-                if (rdOps.IsStartElement("s")) {
-                  // Read the <s> element as one string
-                  String sWholeS = rdOps.ReadOuterXml();
-                  iSentNum++;
-                  // Process the <s> element:
-                  // (1) put it into an XmlDocument
-                  XmlDocument pdxSrc = new XmlDocument();
-                  pdxSrc.LoadXml(sWholeS);
-                  // (2) Create a namespace mapping for the opensubtitles *source* xml document
-                  XmlNamespaceManager nsOps = new XmlNamespaceManager(pdxSrc.NameTable);
-                  nsOps.AddNamespace("df", pdxSrc.DocumentElement.NamespaceURI);
-                  // (3) Create a sentence identifier
-                  String sSentId = sBare + ".p.1.s." + iSentNum;
-                  // (4) The first <s> should at least have some <w> elements
-                  if (iSentNum == 1) {
-                    // Check out first sentence
-                    if (pdxSrc.SelectSingleNode("./descendant::df:w", nsOps) == null) {
-                      // Skip this file -- it contains RAW info, no <w> elements
-                      return true;
-                    }
-                  }
-                  // (5) Create a new sentence in the buffer
-                  Sent oSent = new Sent(sSentId);
-                  lSentBuf.Add(oSent);
-                  // (6) Process all *descendants* of this <s> one-by-one
-                  XmlNodeList ndChild = pdxSrc.SelectNodes("./descendant-or-self::df:s/descendant::df:*", nsOps);
-                  int iWord = 0;
-                  for (int i = 0; i < ndChild.Count; i++) {
-                    // Get this child
-                    XmlNode ndThis = ndChild.Item(i);
-                    // Action depends on the type of child this is
-                    switch (ndThis.Name) {
-                      case "time":
-                        // Get the time id and value
-                        String sTimeId = ndThis.Attributes["id"].Value;
-                        String sTimeVal = ndThis.Attributes["value"].Value;
-                        // Is this the *start* or *end* time?
-                        if (sTimeId.EndsWith("S")) {
-                          // Keep track of the latest *start* time and reset the end time
-                          sTimeStart = sTimeVal; sTimeEnd = ""; bStart = true;
-                          // Get the SRT line number
-                          sLineSrt = sTimeId.Substring(1, sTimeId.Length - 2);
-                        } else {
-                          // Add the end-time
-                          sTimeEnd = sTimeVal;
-                          // Reset the starting time
-                          sTimeStart = "";
-                          bEnd = true;
-                          if (bEnd) {
-                            // Reset flag
-                            bEnd = false;
-                            // Add mark for starting
-                            lSentBuf[lSentBuf.Count - 1].markEnd();
-                          }
-                          // Process the sentence buffer
-                          // (a) Process all previous sentences
-                          int iCount = lSentBuf.Count;
-                          if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd)) {
-                            return false;
-                          }
-                          // (b) Process the words in the current sentence
-                          List<WordBuf> lCurrent = lSentBuf[lSentBuf.Count - 1].words;
-                          for (int j = 0; j < lCurrent.Count; j++) {
-                            // Check if this word needs to have an end-time
-                            if (lCurrent[j].e == "") lCurrent[j].e = sTimeEnd;
-                          }
-                        }
-                        break;
-                      case "i": // Some have an <i> tag to indicate what goes on one line: ignore
-                        break;
-                      case "w":
-                        // Process this word
-                        iWord++;
-                        // Get the text of this word
-                        String sWord = ndThis.InnerText;
-                        // Create an identifier for this word
-                        // String sWordId = sSentId + ".w." + iWord;
-                        String sWordCl = (util.General.DoLike(sWord, ".|,|...|..|-|?|!|\"|'|:|;|(|)")) ? "Punct" : "Vern";
-                        // Add this word to the buffer of this current sentence
-                        lSentBuf[lSentBuf.Count - 1].addWord(sWord, sWordCl);
-                        // Add the start-time to this word
-                        lSentBuf[lSentBuf.Count - 1].addStart(sTimeStart);
-                        // Add the SRT number to this word
-                        lSentBuf[lSentBuf.Count - 1].addLine(sLineSrt);
-                        if (bStart) {
-                          // Reset flag
-                          bStart = false;
-                          // Add mark for starting
-                          lSentBuf[lSentBuf.Count - 1].markStart();
-                        }
-
-                        break;
-                      default:
-                        // No idea what to do here -- just skip??
-                        break;
-                    }
-                  }
-                }
-              }   // End while
-              // Process any remaining sentences
-              if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd)) {
-                return false;
-              }
-            } else {
-              // Process reading the input
-              WriteShallowNode(rdFolia, wrFolia);
-            }
-
-          }
-          // debug("Point 3: locked = " + util.General.IsFileLocked(sFileTmp));
-          wrFolia.Flush();
-          wrFolia.Close();  // wrFolia.Dispose();
-          rdOps.Close();    // rdOps.Dispose();
-          rdFileTmp.Close();
-          rdFolia.Close();  // rdFolia.Dispose();
-          rdFileTmpF.Close();
-          // debug("Point 4: locked = " + util.General.IsFileLocked(sFileTmp));
-        }
-        
-
-        // Remove the temporary file
-        File.Delete(sFileTmp);
-        */
         // Remove the temporary Folia file
         File.Delete(sFileTmpF);
 
