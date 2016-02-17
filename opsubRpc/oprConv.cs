@@ -65,7 +65,10 @@ namespace opsubRpc {
         String sFileCmdi = sFileIn.Replace(".folia.xml.gz", ".cmdi.xml");
 
         // Do we need to continue?
-        if (!bForce && File.Exists(sFileCmdi)) return true;
+        if (!bForce && File.Exists(sFileCmdi)) {
+          errHandle.Status("OpsToCmdi skips: " + sFileInXml);
+          return true;
+        }
 
         // Decompress input .gz file
         if (!util.General.DecompressFile(sFileIn, sFileInXml)) return false;
@@ -192,6 +195,8 @@ namespace opsubRpc {
                 serializer.Serialize(stream, oSubtiel);
 
  
+            } else {
+              errHandle.Status("OpsToCmdi no information for: " + sFileInXml);
             }
           }
         }
