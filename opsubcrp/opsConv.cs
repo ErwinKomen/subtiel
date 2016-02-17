@@ -31,11 +31,13 @@ namespace opsubcrp {
      *              sDirIn      - Directory under which the input files are located
      *              sDirOut     - Directory where the output files should come
      *              bForce      - Create result, even though it exists already
+     *              bMulti      - Only do multi-part files
      *              bIsDebug    - Debugging mode on or off
      * History:
      * 27/jan/2016 ERK Created
        ------------------------------------------------------------------------------------- */
-    public bool ConvertOneOpsToFolia(String sFileIn, String sDirIn, String sDirOut, bool bForce, bool bIsDebug) {
+    public bool ConvertOneOpsToFolia(String sFileIn, String sDirIn, String sDirOut, bool bForce, 
+      bool bMulti, bool bIsDebug) {
       // XmlReader rdOps = null;
       XmlWriter wrFolia = null;
       List<Sent> lSentBuf = new List<Sent>(); // Buffer containing sentences and words
@@ -96,7 +98,7 @@ namespace opsubcrp {
         }
 
         // Check if we need to continue
-        if (!bForce && iMax == 1) {
+        if ((!bForce || bMulti) && iMax == 1) {
           debug("Skipping: " + sFileIn);
           return true;
         }
@@ -136,11 +138,21 @@ namespace opsubcrp {
         // Create a temporary folia output file with the bare essentials
         String sFileTmpF = sFileOut + ".tmp";
         // Bare folia text
-        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, sMovieName, sMovieYear, iSubtitle, iVersion, iMax) +
+        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, "", sMovieYear, iSubtitle, iVersion, iMax) +
           objOpsFolia.getExtro();
         // Write this text to a file
         XmlDocument pdxBareF = new XmlDocument();
-        pdxBareF.LoadXml(sBareFolia);
+        try {
+          pdxBareF.LoadXml(sBareFolia);
+        } catch (Exception ex) {
+          errHandle.DoError("ConvertOneOpsToFolia/BareFolia problem", ex); // Provide standard error message
+          return false;
+        }
+        // Adapt the moviename
+        XmlNamespaceManager nsBare = new XmlNamespaceManager(pdxBareF.NameTable);
+        nsBare.AddNamespace("b", pdxBareF.DocumentElement.NamespaceURI);
+        XmlNode ndxMvName = pdxBareF.SelectSingleNode("./descendant::b:meta[@id='name']", nsBare);
+        if (ndxMvName != null) ndxMvName.InnerText = sMovieName;
         pdxBareF.Save(sFileTmpF);
         // Don't need objOpsFolia anymore
         objOpsFolia = null;
@@ -164,6 +176,12 @@ namespace opsubcrp {
         lFileIn.Sort();
         int iFile = 0;    // Number of the file from the [lFileIn] list
 
+        // Skip those that do not have the correct number of parts
+        if (iMax != lFileIn.Count) {
+          debug("--Part/Count mismatch");
+          return true;
+        }
+
         // (3) Open the bare FoLiA file for input
         using (StreamReader rdFileTmpF = new StreamReader(sFileTmpF))
         using (XmlReader rdFolia = XmlReader.Create(rdFileTmpF))
@@ -180,6 +198,11 @@ namespace opsubcrp {
               // (8) Do make sure that we WRITE the start element away
               WriteShallowNode(rdFolia, wrFolia);
 
+              // Check the index
+              if (iFile<0 || iFile >= lFileIn.Count) {
+                // Cannot do this
+                errHandle.DoError("ConvertOneOpsToFolia", "iFile="+iFile+" but lFileIn="+lFileIn.Count);
+              }
               // Retrieve the next input file from the list
               String sFileTmp = lFileIn[iFile].Replace(".xml.gz", "xml");
               // Unzip the file

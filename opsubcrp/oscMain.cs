@@ -27,6 +27,7 @@ namespace opsubcrp {
       String sDict = "";        // Movie dictionary
       bool bIsDebug = false;    // Debugging
       bool bForce = false;      // Force
+      bool bMulti = false;      // Only do multi-part subtitles
 
       try {
         // Check command-line options
@@ -44,6 +45,9 @@ namespace opsubcrp {
                 break;
               case "m": // Movie dictionary
                 sDict = args[++i];
+                break;
+              case "2":
+                bMulti = true;
                 break;
               case "f": // Force
                 bForce = true;
@@ -80,7 +84,7 @@ namespace opsubcrp {
         if (Directory.Exists(sInput)) {
           // Filter: make sure we only pass on the *first* of multiple files
           //        (Handler needs to process the additional ones)
-          WalkDirectoryTree(sInput, "*1of*.gz", sInput, sOutput, bForce, bIsDebug, ref objConv);
+          WalkDirectoryTree(sInput, "*_1of*.gz", sInput, sOutput, bForce, bMulti, bIsDebug, ref objConv);
         } else {
           // Show we don't have input file
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
@@ -106,7 +110,7 @@ namespace opsubcrp {
     /// <param name="bIsDebug"></param>
     /// <param name="objConv"></param>
     static void WalkDirectoryTree(String sStartDir, String sFilter, String sInput, 
-      String sOutput, bool bForce, bool bIsDebug, ref opsConv objConv) {
+      String sOutput, bool bForce, bool bMulti, bool bIsDebug, ref opsConv objConv) {
       String[] arFiles = null;
       String[] arSubDirs = null;
 
@@ -130,7 +134,7 @@ namespace opsubcrp {
         // Walk all files in this directory
         foreach (String sFile in arFiles) {
           // Parse this input file to the output directory
-          if (!objConv.ConvertOneOpsToFolia(sFile, sInput, sOutput, bForce, bIsDebug)) {
+          if (!objConv.ConvertOneOpsToFolia(sFile, sInput, sOutput, bForce, bMulti, bIsDebug)) {
             errHandle.DoError("Main", "Could not convert file [" + sFile + "]");
             return;
           }
@@ -141,7 +145,7 @@ namespace opsubcrp {
         // Walk all directories
         foreach (String sDirName in arSubDirs) {
           // Resursive call for each subdirectory.
-          WalkDirectoryTree(sDirName, sFilter, sInput, sOutput, bForce, bIsDebug, ref objConv);
+          WalkDirectoryTree(sDirName, sFilter, sInput, sOutput, bForce, bMulti, bIsDebug, ref objConv);
         }
 
       }            
