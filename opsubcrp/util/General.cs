@@ -184,13 +184,13 @@ namespace opsubcrp.util {
     /// <param name="sFileIn"></param>
     /// <param name="sFileOut"></param>
     /// <returns></returns>
-    public static bool DecompressFile(String sFileIn, String sFileOut) {
+    public static bool DecompressFile(String sFileIn, String sFileOut, FileMode fmDecomp = FileMode.Create) {
       const int size = 8192;
       byte[] buffer = new byte[size];
 
       try {
         using (FileStream fCompr = new FileStream(sFileIn, FileMode.Open, FileAccess.Read))
-        using (FileStream fDecom = new FileStream(sFileOut, FileMode.Create, FileAccess.Write))
+        using (FileStream fDecom = new FileStream(sFileOut, fmDecomp, FileAccess.Write))
         using (GZipStream alg = new GZipStream(fCompr, CompressionMode.Decompress)) {
           int bytesRead = 0;
           do {

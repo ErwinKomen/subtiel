@@ -44,6 +44,9 @@ namespace opsubcrp {
         if (!File.Exists(sFileIn)) return false;
         if (!Directory.Exists(sDirOut)) return false;
 
+        // If the input file cannot be read, then skip it
+        if (!util.General.CanReadFile(sFileIn)) return true;
+
         // Make sure dirout does not contain a trailing /
         if (sDirOut.EndsWith("/") || sDirOut.EndsWith("\\"))
           sDirOut = sDirOut.Substring(0, sDirOut.Length - 1);
@@ -60,14 +63,18 @@ namespace opsubcrp {
 
         // Create a destination file name inside [sDirOut]
         String sFileName = Path.GetFileNameWithoutExtension(sFileIn);
+        string sFileBase = Path.GetFullPath( Path.GetDirectoryName(sFileIn) + "/" + Path.GetFileName(sFileIn));
         String sBare = sFileName;
         int iUs = sBare.IndexOf('_');
         int iVersion = 1;   // Default version number
+        int iMax = 1;       // Maximum version number
         int iSubtitle = 0;  // Default subtitles.org number
         if (iUs >=0) { 
           sBare = sBare.Substring(0, iUs);
           iVersion = Convert.ToInt32(sFileName.Substring(iUs + 1, 1));
+          iMax = Convert.ToInt32(sFileName.Substring(iUs + 4, 1));
         }
+
         UInt64 iNumber;
         if (UInt64.TryParse(sBare, out iNumber)) {
           iSubtitle = Convert.ToInt32( iNumber);
@@ -77,19 +84,9 @@ namespace opsubcrp {
         }
         // sBare = "S-O_" + string.Format("00000000", ((int) sBare));
         String sDstBare = Path.GetFullPath(sDstDir + "/" + sBare);
-        String sFileTmp = Path.GetFullPath(sDstBare + ".xml");
+       // String sFileTmp = Path.GetFullPath(sDstBare + ".xml");
         String sFileOut = Path.GetFullPath(sDstBare + ".folia.xml");
         String sFileOutZ = Path.GetFullPath(sDstBare + ".folia.xml.gz");
-
-        // DOuble check to see if the conversion was already done
-        if (!bForce && File.Exists(sFileOut) && !File.Exists(sFileTmp)) return true;
-        // If this is a different version, and we already have a copy, then skip it
-        if (iVersion > 1 && File.Exists(sFileOut) && !File.Exists(sFileTmp)) return true;
-
-        // debug("Point 1: locked = " + util.General.IsFileLocked(sFileTmp));
-        // Unzip the input file to the temporary file
-        if (!util.General.DecompressFile(sFileIn, sFileTmp)) return false;
-        // debug("Point 2: locked = " + util.General.IsFileLocked(sFileTmp));
 
         // Other initialisations before the conversion starts
         OpsToFolia objOpsFolia = new OpsToFolia(errHandle);
@@ -103,10 +100,17 @@ namespace opsubcrp {
         wrSet.NamespaceHandling = NamespaceHandling.OmitDuplicates;
         wrSet.ConformanceLevel = ConformanceLevel.Document;
 
+        /*
+        // DOuble check to see if the conversion was already done
+        if (!bForce && File.Exists(sFileOut) && !File.Exists(sFileTmp)) return true;
+        // If this is a different version, and we already have a copy, then skip it
+        if (iVersion > 1 && File.Exists(sFileOut) && !File.Exists(sFileTmp)) return true;
+         * */
+
         // Create a temporary folia output file with the bare essentials
         String sFileTmpF = sFileOut + ".tmp";
         // Bare folia text
-        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, sMovieName, sMovieYear, iSubtitle, iVersion) + 
+        String sBareFolia = objOpsFolia.getIntro(sBare, sIdMovie, sMovieName, sMovieYear, iSubtitle, iVersion) +
           objOpsFolia.getExtro();
         // Write this text to a file
         XmlDocument pdxBareF = new XmlDocument();
@@ -115,7 +119,7 @@ namespace opsubcrp {
         // Don't need objOpsFolia anymore
         objOpsFolia = null;
 
-        // Convert the temporary file to the output file
+        // Convert the temporary files to the output file
         // (1) Open the input file
         debug("Starting: " + sFileIn);
 
@@ -129,13 +133,185 @@ namespace opsubcrp {
         using (StreamReader rdFileTmpF = new StreamReader(sFileTmpF))
         using (XmlReader rdFolia = XmlReader.Create(rdFileTmpF))
 
+        // (5) Create an output file 
+        using (StreamWriter wrFileTmpOut = new StreamWriter(sFileOut))
+        using (wrFolia = XmlWriter.Create(wrFileTmpOut, wrSet)) {
+
+          // (6) Walk through the bare folia input file
+          while (!rdFolia.EOF && rdFolia.Read()) {
+            // (7) Check what kind of input this is
+            // Note: we need to pause after reading the <p> start element
+            if (rdFolia.IsStartElement("p")) {
+              // (8) Do make sure that we WRITE the start element away
+              WriteShallowNode(rdFolia, wrFolia);
+
+              // Determine the file name template we will be looking for
+              String sFileInTemplate = sFileName.Replace("1of" + iMax, "?of" + iMax) + ".gz";
+              // Get all the files fulfilling this template
+              String[] arFileIn = Directory.GetFiles(Path.GetDirectoryName(sFileIn), sFileInTemplate, SearchOption.TopDirectoryOnly);
+              // Make sure the files are sorted correctly
+              List<String> lFileIn = arFileIn.ToList<String>();
+              lFileIn.Sort();
+              // Walk all .xml.gz files belonging to this subtitle
+              for (int f = 0; f < lFileIn.Count; f++) {
+                // Determine a temporary file name
+                String sFileTmp = lFileIn[f].Replace(".xml.gz", "xml");
+                // Unzip the file
+                if (!util.General.DecompressFile(lFileIn[f], sFileTmp)) return false;
+
+                // (4) Open the open-subtitle xml file for input
+                using (StreamReader rdFileTmp = new StreamReader(sFileTmp))
+                using (XmlReader rdOps = XmlReader.Create(rdFileTmp)) {
+                  // (9) Walk through the *actual* open-subtitle input file
+                  while (!rdOps.EOF && rdOps.Read()) {
+                    // (10) Check what this is
+                    if (rdOps.IsStartElement("s")) {
+                      // Read the <s> element as one string
+                      String sWholeS = rdOps.ReadOuterXml();
+                      iSentNum++;
+                      // Process the <s> element:
+                      // (1) put it into an XmlDocument
+                      XmlDocument pdxSrc = new XmlDocument();
+                      pdxSrc.LoadXml(sWholeS);
+                      // (2) Create a namespace mapping for the opensubtitles *source* xml document
+                      XmlNamespaceManager nsOps = new XmlNamespaceManager(pdxSrc.NameTable);
+                      nsOps.AddNamespace("df", pdxSrc.DocumentElement.NamespaceURI);
+                      // (3) Create a sentence identifier
+                      String sSentId = sBare + ".p.1.s." + iSentNum;
+                      // (4) The first <s> should at least have some <w> elements
+                      if (iSentNum == 1) {
+                        // Check out first sentence
+                        if (pdxSrc.SelectSingleNode("./descendant::df:w", nsOps) == null) {
+                          // Skip this file -- it contains RAW info, no <w> elements
+                          return true;
+                        }
+                      }
+                      // (5) Create a new sentence in the buffer
+                      Sent oSent = new Sent(sSentId);
+                      lSentBuf.Add(oSent);
+                      // (6) Process all *descendants* of this <s> one-by-one
+                      XmlNodeList ndChild = pdxSrc.SelectNodes("./descendant-or-self::df:s/descendant::df:*", nsOps);
+                      int iWord = 0;
+                      for (int i = 0; i < ndChild.Count; i++) {
+                        // Get this child
+                        XmlNode ndThis = ndChild.Item(i);
+                        // Action depends on the type of child this is
+                        switch (ndThis.Name) {
+                          case "time":
+                            // Get the time id and value
+                            String sTimeId = ndThis.Attributes["id"].Value;
+                            String sTimeVal = ndThis.Attributes["value"].Value;
+                            // Is this the *start* or *end* time?
+                            if (sTimeId.EndsWith("S")) {
+                              // Keep track of the latest *start* time and reset the end time
+                              sTimeStart = sTimeVal; sTimeEnd = ""; bStart = true;
+                              // Get the SRT line number
+                              sLineSrt = sTimeId.Substring(1, sTimeId.Length - 2);
+                            } else {
+                              // Add the end-time
+                              sTimeEnd = sTimeVal;
+                              // Reset the starting time
+                              sTimeStart = "";
+                              bEnd = true;
+                              if (bEnd) {
+                                // Reset flag
+                                bEnd = false;
+                                // Add mark for starting
+                                lSentBuf[lSentBuf.Count - 1].markEnd();
+                              }
+                              // Process the sentence buffer
+                              // (a) Process all previous sentences
+                              int iCount = lSentBuf.Count;
+                              if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd)) {
+                                return false;
+                              }
+                              // (b) Process the words in the current sentence
+                              List<WordBuf> lCurrent = lSentBuf[lSentBuf.Count - 1].words;
+                              for (int j = 0; j < lCurrent.Count; j++) {
+                                // Check if this word needs to have an end-time
+                                if (lCurrent[j].e == "") lCurrent[j].e = sTimeEnd;
+                              }
+                            }
+                            break;
+                          case "i": // Some have an <i> tag to indicate what goes on one line: ignore
+                            break;
+                          case "w":
+                            // Process this word
+                            iWord++;
+                            // Get the text of this word
+                            String sWord = ndThis.InnerText;
+                            // Create an identifier for this word
+                            // String sWordId = sSentId + ".w." + iWord;
+                            String sWordCl = (util.General.DoLike(sWord, ".|,|...|..|-|?|!|\"|'|:|;|(|)")) ? "Punct" : "Vern";
+                            // Add this word to the buffer of this current sentence
+                            lSentBuf[lSentBuf.Count - 1].addWord(sWord, sWordCl);
+                            // Add the start-time to this word
+                            lSentBuf[lSentBuf.Count - 1].addStart(sTimeStart);
+                            // Add the SRT number to this word
+                            lSentBuf[lSentBuf.Count - 1].addLine(sLineSrt);
+                            if (bStart) {
+                              // Reset flag
+                              bStart = false;
+                              // Add mark for starting
+                              lSentBuf[lSentBuf.Count - 1].markStart();
+                            }
+
+                            break;
+                          default:
+                            // No idea what to do here -- just skip??
+                            break;
+                        }
+                      }
+                    }
+                  }   // End while
+                  // Process any remaining sentences
+                  if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd)) {
+                    return false;
+                  }
+                  rdOps.Close();    // rdOps.Dispose();
+                  rdFileTmp.Close();
+                  // Remove the temporary file
+                  File.Delete(sFileTmp);
+                }
+
+              }
+            } else {
+              // Process reading the input
+              WriteShallowNode(rdFolia, wrFolia);
+            }
+          }
+          // debug("Point 3: locked = " + util.General.IsFileLocked(sFileTmp));
+          wrFolia.Flush();
+          wrFolia.Close();  // wrFolia.Dispose();
+          rdFolia.Close();  // rdFolia.Dispose();
+          rdFileTmpF.Close();
+          // debug("Point 4: locked = " + util.General.IsFileLocked(sFileTmp));
+        }
+        
+        /*
+        // debug("Point 1: locked = " + util.General.IsFileLocked(sFileTmp));
+        // Unzip the input file to the temporary file
+        if (iMax == 1) {
+          if (!util.General.DecompressFile(sFileIn, sFileTmp)) return false;
+        } else {
+          // Need to decompress several files
+          for (int i = 1; i <= iMax; i++) {
+            String sFileInPart = sFileBase.Replace("1of"+iMax, i+"of"+iMax);
+            // Decompress this file
+            FileMode fmThis = (i == 1) ? FileMode.Create : FileMode.Append;
+            if (!util.General.DecompressFile(sFileInPart, sFileTmp, fmThis)) return false;
+          }
+        }
+        // debug("Point 2: locked = " + util.General.IsFileLocked(sFileTmp));
+        */
+
+        /*
+
         // (4) Open the open-subtitle xml file for input
         using (StreamReader rdFileTmp = new StreamReader(sFileTmp))
         using (XmlReader rdOps = XmlReader.Create(rdFileTmp))
 
-        // (5) Create an output file 
-        using (StreamWriter wrFileTmpOut = new StreamWriter(sFileOut))
-        using (wrFolia = XmlWriter.Create(wrFileTmpOut, wrSet)) {
+ {
           // (6) Walk through the bare folia input file
           while (!rdFolia.EOF && rdFolia.Read()) {
             // (7) Check what kind of input this is
@@ -264,9 +440,11 @@ namespace opsubcrp {
           rdFileTmpF.Close();
           // debug("Point 4: locked = " + util.General.IsFileLocked(sFileTmp));
         }
+        
 
         // Remove the temporary file
         File.Delete(sFileTmp);
+        */
         // Remove the temporary Folia file
         File.Delete(sFileTmpF);
 

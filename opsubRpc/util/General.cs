@@ -177,6 +177,29 @@ namespace opsubRpc.util {
       }
     }
 
+    /// <summary>
+    /// CanReadFile
+    ///     Check if a file can actually be read
+    /// 
+    /// </summary>
+    /// <param name="sFileIn"></param>
+    /// <returns></returns>
+    public static bool CanReadFile(String sFileIn) {
+      const int size = 8192;
+      byte[] buffer = new byte[size];
+
+      try {
+        using (FileStream fSrc = new FileStream(sFileIn, FileMode.Open, FileAccess.Read)) {
+          int bytesRead = 0;
+          // Read buffer
+          bytesRead = fSrc.Read(buffer, 0, buffer.Length);
+        }
+        return true;
+      } catch (Exception ex) {
+        // Return failure
+        return false;
+      }
+    }
 
     /// <summary>
     /// File-to-file buffered decompression

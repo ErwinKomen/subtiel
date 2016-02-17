@@ -78,7 +78,9 @@ namespace opsubcrp {
 
         // Check if the input is a directory or file
         if (Directory.Exists(sInput)) {
-          WalkDirectoryTree(sInput, "*.gz", sInput, sOutput, bForce, bIsDebug, ref objConv);
+          // Filter: make sure we only pass on the *first* of multiple files
+          //        (Handler needs to process the additional ones)
+          WalkDirectoryTree(sInput, "*1of*.gz", sInput, sOutput, bForce, bIsDebug, ref objConv);
         } else {
           // Show we don't have input file
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
