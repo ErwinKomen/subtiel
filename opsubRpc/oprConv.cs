@@ -29,11 +29,18 @@ namespace opsubRpc {
         */
     private String sCmdiXsdText = "";
     private util.xmlTools oTools = null;
+    private String sDirRoot = "/scratch/ekomen/out/";        // Directory under which all should be kept
     private List<MovieHash> lstSimHash = new List<MovieHash>();
     public oprConv(ErrHandle oErr) {
       this.errHandle = oErr;
       this.oTools = new util.xmlTools(oErr);
       lstSimHash.Clear();
+    }
+    // ========================= GETTERS/SETTERS ===========================================
+    public void dirRoot(String sDir) {
+      this.sDirRoot = sDir;
+      if (!sDirRoot.EndsWith("/") && !sDirRoot.EndsWith("\\"))
+        sDirRoot = sDirRoot+"/";
     }
     /* -------------------------------------------------------------------------------------
      * Name:        ConvertOneOpsToCmdi
@@ -216,11 +223,13 @@ namespace opsubRpc {
      * Goal:        Adapt an existing .cmdi file with the MD5 hash of the text in the .folia.xml file
      * Parameters:  sFileIn     - File to be processed
      *              lSubInst    - one subtitle instance
+     *              bSkip       - Skip anything that has *not* been made
      *              bIsDebug    - Debugging mode on or off
      * History:
      * 8/feb/2016 ERK Created
        ------------------------------------------------------------------------------------- */
-    public bool CalculateHashToCmdi(String sFileIn, ref List<SubInstance> lSubInst, bool bIsDebug) {
+    public bool CalculateHashToCmdi(String sFileIn, ref List<SubInstance> lSubInst, 
+      bool bIsDebug) {
       try {
         // Validate
         if (!File.Exists(sFileIn)) return false;
@@ -248,17 +257,18 @@ namespace opsubRpc {
           return true;
         }
 
+        // Prepare statistics information
+        String sHash = ""; int iWords = 0; int iSents = 0;
+
         // Decompress input .gz file
         if (!util.General.DecompressFile(sFileIn, sFileInXml)) return false;
 
         // Calculate the hash and other information
-        String sHash = ""; int iWords = 0; int iSents = 0;
         List<String> lStat = new List<string>();
         if (!oTools.getXmlStats(sFileInXml, ref sHash, lStat, ref iWords, ref iSents)) {
           errHandle.Status("CalculateHashToCmdi: Could not find statistics for [" + sFileCmdi + "]");
           return false;
         }
-
 
         // Read the CMDI
         XmlDocument pdxCmdi = new XmlDocument();
@@ -312,12 +322,19 @@ namespace opsubRpc {
           }
           // Save the file
           pdxCmdi.Save(sFileCmdi);
+          // Retrieve idmovie and imdbid
+          String sIdMovie = "";
+          String sImdbId = "";
+          XmlNode ndxIdMovie = pdxCmdi.SelectSingleNode("./descendant::f:MovieId", nsFolia);
+          XmlNode ndxImdb = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
+          if (ndxIdMovie != null) sIdMovie = ndxIdMovie.InnerText;
+          if (ndxImdb != null) sImdbId = ndxImdb.InnerText;
           // Show what has happened
           errHandle.Status("CalculateHashToCmdi: add [" + sHash + "] to " + sFileCmdi);
           // Add the filename + hash to the list
           lstSimHash.Add(new MovieHash(Convert.ToUInt64(sHash), sFileInXml + ".txt"));
           // Also add it to another list
-          lSubInst.Add(new SubInstance(sFileInXml, Convert.ToUInt64(sHash), iWords, iSents));
+          lSubInst.Add(new SubInstance(sFileInXml, Convert.ToUInt64(sHash), iWords, iSents, sIdMovie, sImdbId));
         }
 
         // Remove the xml file again (the .gz file stays)
@@ -325,7 +342,65 @@ namespace opsubRpc {
 
         return true;
       } catch (Exception ex) {
-        errHandle.DoError("oprConv/ConvertOneOpsToCmdi", ex);
+        errHandle.DoError("oprConv/CalculateHashToCmdi", ex);
+        return false;
+      }
+    }
+
+
+    /* -------------------------------------------------------------------------------------
+      * Name:        HarvestHashFromCmdi
+      * Goal:        Get the hash and other data from the cmdi
+      * History:
+      * 10/feb/2016 ERK Created
+        ------------------------------------------------------------------------------------- */
+    public bool HarvestHashFromCmdi(String sFileIn, ref List<SubInstance> lSubInst) {
+      try {
+        // Determine file names
+        String sFileCmdi = sFileIn.Replace(".folia.xml.gz", ".cmdi.xml");
+
+        // Do we need to continue?
+        if (!File.Exists(sFileCmdi)) {
+          // If the CMDI file does not exist, we cannot adapt it
+          // It is not really an error, but we should give a warning
+          errHandle.Status("HarvestHashFromCmdi: skipping non-existent [" + sFileCmdi + "]");
+          return true;
+        }
+
+        // Prepare statistics information
+        String sHash = ""; int iWords = 0; int iSents = 0;
+        // Read the CMDI
+        XmlDocument pdxCmdi = new XmlDocument();
+        pdxCmdi.Load(sFileCmdi);
+        // Get correct namespace manager
+        XmlNamespaceManager nsFolia = new XmlNamespaceManager(pdxCmdi.NameTable);
+        nsFolia.AddNamespace("f", pdxCmdi.DocumentElement.NamespaceURI);
+        // Zoek het <Subtitle> element 
+        XmlNode ndxSubtitle = pdxCmdi.SelectSingleNode("./descendant::f:Subtitle", nsFolia);
+        if (ndxSubtitle != null) {
+          String sIdMovie = "";
+          String sImdbId = "";
+          // Kijk of er al een <textHash> element is
+          XmlNode ndxTextHash = ndxSubtitle.SelectSingleNode("./child::f:textHash", nsFolia);
+          XmlNode ndxWords = ndxSubtitle.SelectSingleNode("./descendant::f:nWords", nsFolia);
+          XmlNode ndxSents = ndxSubtitle.SelectSingleNode("./descendant::f:nSents", nsFolia);
+          XmlNode ndxIdMovie = pdxCmdi.SelectSingleNode("./descendant::f:MovieId", nsFolia);
+          XmlNode ndxImdb = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
+          if (ndxTextHash != null && ndxWords != null && ndxSents != null) {
+            sHash = ndxTextHash.InnerText;
+            iWords = Convert.ToInt32(ndxWords.InnerText);
+            iSents = Convert.ToInt32(ndxSents.InnerText);
+            sIdMovie = ndxIdMovie.InnerText;
+            sImdbId = ndxImdb.InnerText;
+            
+            // Also add it to another list
+            lSubInst.Add(new SubInstance(sFileCmdi, Convert.ToUInt64(sHash), iWords, iSents, sIdMovie, sImdbId));
+          }
+        }
+
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("oprConv/HarvestHashFromCmdi", ex);
         return false;
       }
     }
@@ -345,22 +420,31 @@ namespace opsubRpc {
         for (int i=0;i<lSubInst.Count;i++) {
           // Walk through all other instances that could match up with me
           for (int j=0;j< i;j++) {
-            // Get the hamming distance between items <i,j>
-            int iHdist = oSim.GetHammingDistance(lSubInst[i].simhash, lSubInst[j].simhash);
-            // Is this on or below the threshold?
-            if (iHdist <= iGoodHd) {
-              // So this is probably a duplicate of me -- add it
-              lSubInst[i].addDuplicate(j);
-              // Also add me to the list of the other one
-              lSubInst[j].addDuplicate(i);
+            // Check if the idmove or the imdbid is similar between <i,j>
+            if (lSubInst[i].sIdMovie == lSubInst[j].sIdMovie ||
+                lSubInst[i].sImdbId == lSubInst[j].sImdbId) {
+              // Get the hamming distance between items <i,j>
+              int iHdist = oSim.GetHammingDistance(lSubInst[i].simhash, lSubInst[j].simhash);
+              // Is this on or below the threshold?
+              if (iHdist <= iGoodHd) {
+                // So this is probably a duplicate of me -- add it
+                lSubInst[i].addDuplicate(j);
+                // Also add me to the list of the other one
+                lSubInst[j].addDuplicate(i);
+              }
             }
           }
         }
 
         // Walk through all the instances again
         for (int i = 0; i < lSubInst.Count; i++) {
+          String sTargetDir = sDirRoot+"opus/";   // Directory where we will store the result
+
           // Get this instance
           SubInstance oOrg = lSubInst[i];
+
+          // int iPtc = (100 * (i + 1)) / lSubInst.Count;
+          // errHandle.Status("Considering:\t"+iPtc+"%\t" + oOrg.name);
 
           // Initialisations
           String sLink = "";
@@ -439,6 +523,16 @@ namespace opsubRpc {
             // Add the information into the status info node
             ndxStatusInfo.Attributes["status"].Value = oOrg.license;
             ndxStatusInfo.Attributes["link"].Value = sLink;
+            // Remove any previous links that might be still in here
+            XmlNode ndxWork = ndxStatusInfo.SelectSingleNode("./child::f:Similar", nsFolia);
+            while (ndxWork != null) {
+              XmlNode ndxRemove = ndxWork;
+              ndxWork = ndxWork.SelectSingleNode("./following-sibling::f:Similar", nsFolia);
+              // Remove worknode contents
+              ndxRemove.RemoveAll();
+              // Remove the worknode itself
+              ndxStatusInfo.RemoveChild(ndxRemove);
+            }
             // Add any links
             for (int j=0;j<lSimilar.Count;j++) {
               XmlNode ndxSimi = oTools.AddXmlChild(ndxStatusInfo, "Similar",
@@ -471,28 +565,40 @@ namespace opsubRpc {
                     if (sDetails == "") sDetails = sEvid;
                   }
                 }
-                // Determine license status from the combination of the three booleans
-                if (bCopyright || bTranslated || bDownload) {
-                  // We should be able to determine the license information
-                  String sLicense = "";
-                  if (bCopyright)
-                    sLicense = "copyright";
-                  else if (bTranslated)
-                    sLicense = "translation";
-                  else if (bDownload)
-                    sLicense = "download";
-                  // Find the location where we are going to put this information
-                  XmlNode ndxLicenseType = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseType", nsFolia);
-                  ndxLicenseType.InnerText = sLicense;
-                  XmlNode ndxLicenseDetails = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseDetails", nsFolia);
-                  ndxLicenseDetails.InnerText = sDetails;
-                } else {
-                  // There is no copyright/translated/download information: check if we can determine the license
-                  //    information in another way
-                  // (1) Look at Subtitle/Author/UserClass
-                  
-                  // (2)  
+                // Additional check
+                XmlNode ndxUserClass = ndxSubtitle.SelectSingleNode("./descendant::f:Author/child::f:UserClass", nsFolia);
+                if (ndxUserClass != null) {
+                  String sUserClass = ndxUserClass.InnerText.ToLower();
+                  if (sUserClass == "subtranslator") {
+                    bTranslated = true;
+                    sDetails = "userclass=SubTranslator";
+                  }
                 }
+                // We should be able to determine the license information
+                String sLicense = "";
+                if (bCopyright)
+                  sLicense = "copyright";
+                else if (bTranslated)
+                  sLicense = "translation";
+                else if (bDownload)
+                  sLicense = "download";
+                else
+                  sLicense = "unknown";
+                // Find the location where we are going to put this information
+                XmlNode ndxLicenseType = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseType", nsFolia);
+                ndxLicenseType.InnerText = sLicense;
+                XmlNode ndxLicenseDetails = ndxSubtitle.SelectSingleNode("./descendant::f:LicenseDetails", nsFolia);
+                ndxLicenseDetails.InnerText = sDetails;
+                // Adapt the target directory
+                XmlNode ndxYear = pdxCmdi.SelectSingleNode("./descendant::f:Year", nsFolia);
+                XmlNode ndxImdbId = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
+                // errHandle.Status("findDuplicates - point #11: " + ((ndxYear == null) ? "null" : ""));
+                // errHandle.Status("findDuplicates - point #12: " + ((ndxImdbId == null) ? "null" : ""));
+                String sYear = ndxYear.InnerText;
+                String sImdbId = ndxImdbId.InnerText;
+                sTargetDir += oOrg.license + "/" + sLicense + "/";
+                if (sYear != "") sTargetDir += sYear + "/";
+                if (sImdbId != "") sTargetDir += sImdbId + "/";
                 break;
               default:
                 // No further license determination is needed, since this is a copy 
@@ -501,8 +607,29 @@ namespace opsubRpc {
           }
           // Save the adapted CMDI
           pdxCmdi.Save(sFileCmdi);
-          // Show where we are
-          errHandle.Status("findDuplicates:\t["+ oOrg.name+"]\t[" + oOrg.license+"/"+sLink + "]");
+
+          // Do we need to copy the CMDI and the FOLIA?
+          if (oOrg.license != "copy") {
+            // Create the target directory if it does not exist yet
+            if (!Directory.Exists(sTargetDir)) {
+              Directory.CreateDirectory(sTargetDir);
+            }
+            // Get the file name
+            String sName = Path.GetFileNameWithoutExtension(sFileCmdi).Replace(".cmdi", "");
+            String sSrc = Path.GetDirectoryName(sFileCmdi);
+            if (!sSrc.EndsWith("/") && !sSrc.EndsWith("\\")) sSrc += "/";
+            // Copy the CMDI
+            File.Copy(sFileCmdi, sTargetDir + sName + ".cmdi.xml",true);
+            // Copy the folia
+            sName = sName + ".folia.xml.gz";
+            File.Copy(sSrc+sName, sTargetDir + sName, true);
+            // Show where we are
+            errHandle.Status("copying:\t" + oOrg.name + "\t" + oOrg.license + "\t" + sLink + "\t" + sTargetDir);
+          } else {
+            // Show where we are
+            errHandle.Status("findDuplicates:\t[" + oOrg.name + "]\t[" + oOrg.license + "/" + sLink + "]");
+          }
+
         }
 
 

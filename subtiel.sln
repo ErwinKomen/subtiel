@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "opsubcrp", "opsubcrp\opsubc
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "opsubRpc", "opsubRpc\opsubRpc.csproj", "{64BAA586-2283-411B-854D-5F9ED927457F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "opsubeng", "opsubeng\opsubeng.csproj", "{1CBDF170-16BB-40E4-B2FF-41C1DF817355}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{64BAA586-2283-411B-854D-5F9ED927457F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{64BAA586-2283-411B-854D-5F9ED927457F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{64BAA586-2283-411B-854D-5F9ED927457F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1CBDF170-16BB-40E4-B2FF-41C1DF817355}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1CBDF170-16BB-40E4-B2FF-41C1DF817355}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1CBDF170-16BB-40E4-B2FF-41C1DF817355}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1CBDF170-16BB-40E4-B2FF-41C1DF817355}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

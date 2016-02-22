@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Xml;
 
-namespace opsubcrp.conv {
+namespace opsub.conv {
   /* -------------------------------------------------------------------------------------
    * Name:  PsdxToFolia
    * Goal:  The "XmlConv" implementation to convert the psdx <forest>, <eTree>, <eLeaf> structure

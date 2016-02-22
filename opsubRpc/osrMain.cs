@@ -21,9 +21,11 @@ namespace opsubRpc {
     // Command-line entry point + argument handling
     static void Main(string[] args) {
       String sInput = "";       // Input file or dir
+      String sOutput = "/scratch/ekomen/out/";      // Output directory, if specified
       bool bIsDebug = false;    // Debugging
       bool bForce = false;      // Force
       bool bOview = false;      // Make overview or not
+      bool bSkip = false;       // Skip everything that has *not* been made
       String sAction = "cmdi";  // Type of action to be taken
 
       try {
@@ -39,6 +41,12 @@ namespace opsubRpc {
                 break;
               case "f": // Force
                 bForce = true;
+                break;
+              case "s": // Skip
+                bSkip = true;
+                break;
+              case "o": // Output directory
+                sOutput = args[++i];
                 break;
               case "h": // Calculate hashes and add them to existing .cmdi.xml files
                 sAction = "hash";
@@ -61,12 +69,15 @@ namespace opsubRpc {
         oprConv objConv = new oprConv(errHandle);
         osrMovie objMovie = new osrMovie(errHandle);
 
+        // Set directory for conversion
+        objConv.dirRoot(sOutput);
+
         // Initialise the Treebank Xpath functions, which may make use of tb:matches()
         util.XPathFunctions.conTb.AddNamespace("tb", util.XPathFunctions.TREEBANK_EXTENSIONS);
 
         // Check if the input is a directory or file
         if (Directory.Exists(sInput)) {
-          WalkDirectoryTree(sInput, "*.folia.xml.gz", sInput, bForce, bIsDebug, sAction, ref objConv, ref objMovie);
+          WalkDirectoryTree(sInput, "*.folia.xml.gz", sInput, bForce, bSkip, bIsDebug, sAction, ref objConv, ref objMovie);
         } else {
           // Show we don't have input file
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
@@ -104,7 +115,7 @@ namespace opsubRpc {
     /// <param name="objConv"></param>
     /// <param name="objMovie"></param>
     static void WalkDirectoryTree(String sStartDir, String sFilter, String sInput,
-      bool bForce, bool bIsDebug, String sAction, ref oprConv objConv, ref osrMovie objMovie) {
+      bool bForce, bool bSkip, bool bIsDebug, String sAction, ref oprConv objConv, ref osrMovie objMovie) {
       String[] arFiles = null;
       String[] arSubDirs = null;
 
@@ -125,6 +136,7 @@ namespace opsubRpc {
 
       // Check if all is valid
       if (arFiles != null) {
+        bSkip = true;
         // Walk all files in this directory
         foreach (String sFile in arFiles) {
           // What we do here depends on the action identified
@@ -137,10 +149,17 @@ namespace opsubRpc {
               }
               break;
             case "hash":
-              // Calculate the HASH of this .folia.xml file, and put it into the existing CMDI
-              if (!objConv.CalculateHashToCmdi(sFile, ref lSubInst, bIsDebug)) {
-                errHandle.DoError("Main", "Could not calculate hash for file [" + sFile + "]");
-                return;
+              if (bSkip) {
+                if (!objConv.HarvestHashFromCmdi(sFile, ref lSubInst)) {
+                  errHandle.DoError("Main", "Could not harvest hash for file [" + sFile + "]");
+                  return;
+                }
+              } else { 
+                // Calculate the HASH of this .folia.xml file, and put it into the existing CMDI
+                if (!objConv.CalculateHashToCmdi(sFile, ref lSubInst, bIsDebug)) {
+                  errHandle.DoError("Main", "Could not calculate hash for file [" + sFile + "]");
+                  return;
+                }
               }
               break;
           }
@@ -151,7 +170,7 @@ namespace opsubRpc {
         // Walk all directories
         foreach (String sDirName in arSubDirs) {
           // Resursive call for each subdirectory.
-          WalkDirectoryTree(sDirName, sFilter, sInput, bForce, bIsDebug, sAction, ref objConv, ref objMovie);
+          WalkDirectoryTree(sDirName, sFilter, sInput, bForce, bSkip, bIsDebug, sAction, ref objConv, ref objMovie);
         }
       }
     }
@@ -181,7 +200,9 @@ namespace opsubRpc {
     public List<int> lDup;  // List of duplicates to this one
     public String license;  // The license code for this one
     public String details;  // Details that can help identify the license
-    public SubInstance(String sFile, UInt64 iSimHash, int iWords, int iSents) {
+    public String sIdMovie; // The idmovie (should be known)
+    public String sImdbId;  // The @imdb number of this movie
+    public SubInstance(String sFile, UInt64 iSimHash, int iWords, int iSents, String sIdMovie, String sImdbId) {
       this.file = sFile;
       this.name = Path.GetFileNameWithoutExtension(sFile);
       this.simhash = iSimHash;
@@ -190,9 +211,14 @@ namespace opsubRpc {
       this.lDup = new List<int>();
       this.license = "";
       this.details = "";
+      this.sIdMovie = sIdMovie;
+      this.sImdbId = sImdbId;
     }
     public void addDuplicate(int iDup) {
       this.lDup.Add(iDup);
     }
+    // ======================= Getters and setters ===============
+    public String idmovie { get { return this.sIdMovie; } set { this.sIdMovie = value; } }
+    public String imdbid { get { return this.sImdbId; } set { this.sImdbId = value; } }
   }
 }

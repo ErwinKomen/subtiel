@@ -25,7 +25,7 @@ namespace opsubcrp {
     public abstract XmlNode stringToSent(String sSent);
     public abstract String getCurrentSrcFile();
     public abstract void setCurrentSrcFile(String sFile);
-    public abstract String getIntro(String sName, String sIdMovie, String sMovieName, String sMovieYear, int iSubtitle, int iVersion);
+    public abstract String getIntro(String sName, String sIdMovie, String sMovieName, String sMovieYear, int iSubtitle, int iVersion, int iMax);
     public abstract String getExtro();
   }
 }

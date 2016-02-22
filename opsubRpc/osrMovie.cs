@@ -83,18 +83,32 @@ namespace opsubRpc {
       * 1/feb/2016 ERK Created
         ------------------------------------------------------------------------------------- */
     private string WebRequestGetData(string url) {
+      System.Net.WebRequest req = null;
+      System.Net.WebResponse resp = null;
+      int MAX_TRIES = 10;
+
       try {
-        System.Net.WebRequest req = System.Net.WebRequest.Create(url);
+        req = System.Net.WebRequest.Create(url);
 
         req.ContentType = "text/xml";
         req.Method = "GET";
 
-        using (System.Net.WebResponse resp = req.GetResponse()) {
-          if (resp == null) return null;
-
-          using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream())) {
-            return sr.ReadToEnd().Trim();
+        // Try getting a response...
+        bool bFound = false;
+        int iTry = 0;
+        do {
+          try {
+            resp = req.GetResponse();
+            bFound = true;
+          } catch (Exception ex) {
+            bFound = false;
+            iTry++;
           }
+        } while (!bFound || iTry > MAX_TRIES);
+        if (resp == null) return null;
+
+        using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream())) {
+          return sr.ReadToEnd().Trim();
         }
       } catch (Exception ex) {
         errHandle.DoError("osrMoview/WebRequestGetData", ex);
