@@ -429,8 +429,8 @@ namespace opsubRpc {
               if (iHdist <= iGoodHd) {
                 // So this is probably a duplicate of me -- add it
                 lSubInst[i].addDuplicate(j);
-                // Also add me to the list of the other one
-                lSubInst[j].addDuplicate(i);
+                // DO NOT add me to the list of the other one
+                // lSubInst[j].addDuplicate(i);
               }
             }
           }
