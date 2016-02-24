@@ -8,6 +8,7 @@ using System.Data;
 using System.Net;
 // using Newtonsoft.Json;
 using System.Threading.Tasks;
+using omdb;
 
 namespace opsubRpc {
   class oprConv {
@@ -351,6 +352,8 @@ namespace opsubRpc {
     /* -------------------------------------------------------------------------------------
       * Name:        HarvestHashFromCmdi
       * Goal:        Get the hash and other data from the cmdi
+      * Parameters:  sFileIn     - File to be processed
+      *              lSubInst    - one subtitle instance
       * History:
       * 10/feb/2016 ERK Created
         ------------------------------------------------------------------------------------- */
@@ -412,7 +415,7 @@ namespace opsubRpc {
       * History:
       * 10/feb/2016 ERK Created
         ------------------------------------------------------------------------------------- */
-    public bool findDuplicates(ref List<SubInstance> lSubInst, int iGoodHd) {
+    public bool findDuplicates(ref List<SubInstance> lSubInst, int iGoodHd, ref omdbapi objOmdb) {
       try {
         // Need to have a hash analyzer object
         util.SimHashAnalyzer oSim = new util.SimHashAnalyzer();
@@ -558,7 +561,14 @@ namespace opsubRpc {
                     if (bTranslated || bDownload || !bCopyright) sDetails = sEvid;
                     bCopyright = true;
                   } else if (util.General.DoLike(sEvid, "*vertaald*|*vertaling*|*ondertiteling*|*bewerkt*")) {
-                    bTranslated = true;
+                    // Double check the text of the evidence
+                    if (util.General.DoLike(sEvid, "*broadcast text*|*bti *")) {
+                      // This is 'stolen' from BTI or its predecessor
+                      bCopyright = true;
+                      sEvid = "BTI: " + sEvid;
+                    } else {
+                      bTranslated = true;
+                    }
                     if (sDetails == "" || bDownload) sDetails = sEvid;
                   } else if (util.General.DoLike(sEvid, "*download*")) {
                     bDownload = true;
@@ -596,13 +606,79 @@ namespace opsubRpc {
                 // errHandle.Status("findDuplicates - point #12: " + ((ndxImdbId == null) ? "null" : ""));
                 String sYear = ndxYear.InnerText;
                 String sImdbId = ndxImdbId.InnerText;
-                sTargetDir += oOrg.license + "/" + sLicense + "/";
-                if (sYear != "") sTargetDir += sYear + "/";
+                // Determine the target directory...
+                // WAS: sTargetDir += oOrg.license + "/" + sLicense + "/";
+                if (sYear != "")
+                  sTargetDir += sYear + "/";
+                else
+                  sTargetDir += "unknown/";
                 if (sImdbId != "") sTargetDir += sImdbId + "/";
                 break;
               default:
                 // No further license determination is needed, since this is a copy 
                 break;
+            }
+          }
+          // Zoek het <Movie> element 
+          XmlNode ndxMovie = pdxCmdi.SelectSingleNode("./descendant::f:Movie", nsFolia);
+          if (ndxMovie != null) {
+            // Check if this has a Runtime component
+            XmlNode ndxRuntime = ndxMovie.SelectSingleNode("./child::f:Runtime", nsFolia);
+            if (ndxRuntime == null) {
+              // If there is no runtime information, movie information needs to be gathered
+              XmlNode ndxImdbId = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
+              String sImdbId = ndxImdbId.InnerText;
+              MovieInfo oInfo = objOmdb.getInfo(sImdbId);
+              if (oInfo == null) {
+                // Not sure what to do now
+                int iError = 1;
+              } else {
+                // (1) Add the runtime information
+                ndxRuntime = oTools.AddXmlChild(ndxMovie, "Runtime");
+                ndxRuntime.InnerText = oInfo.runtime;
+                // (2) Add the COUNTRY information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Country", oInfo.country)) return false;
+                // (3) Add the GENRE information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Genre", oInfo.genre)) return false;
+                // (4) Add the LANGUAGE information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Language", oInfo.language)) return false;
+                // (5) Add the DIRECTOR information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Director", oInfo.director)) return false;
+                // (6) Add the WRITER information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Writer", oInfo.writer)) return false;
+                // (7) Add the ACTOR information
+                if (!addMultiInfo(ndxMovie, nsFolia, "Actor", oInfo.actors)) return false;
+                // (8) Add other information: rated, released, plot, awards, imdbRating, imdbVotes
+                oTools.AddXmlChild(ndxMovie, "Rated", "", oInfo.rated, "text");
+                oTools.AddXmlChild(ndxMovie, "Released", "", oInfo.released, "text");
+                oTools.AddXmlChild(ndxMovie, "Plot", "", oInfo.plot, "text");
+                oTools.AddXmlChild(ndxMovie, "Awards", "", oInfo.awards, "text");
+                oTools.AddXmlChild(ndxMovie, "imdbRating", "", oInfo.imdbRating, "text");
+                oTools.AddXmlChild(ndxMovie, "imdbVotes", "", oInfo.imdbVotes.Replace(",", ""), "text");
+                // (9) Look for the <Series>...
+                XmlNode ndxSeries = pdxCmdi.SelectSingleNode("./descendant::f:Series", nsFolia);
+                if (ndxSeries != null) {
+                  // Get the nodes we are interested in
+                  XmlNode ndxSeason = ndxSeries.SelectSingleNode("./child::f:Season", nsFolia);
+                  XmlNode ndxEpisode = ndxSeries.SelectSingleNode("./child::f:Episode", nsFolia);
+                  XmlNode ndxParent = ndxSeries.SelectSingleNode("./child::f:ParentImdbId", nsFolia);
+                  MovieInfo oParent = null;
+                  if (ndxParent != null && ndxParent.InnerText != "") {
+                    String sParentImdbId = ndxParent.InnerText;
+                    oParent = objOmdb.getInfo(sParentImdbId);
+                  }
+                  // Add the season/episode information
+                  if (ndxSeason != null && ndxEpisode != null) {
+                    if (oParent== null) {
+                      ndxSeason.Attributes["Name"].Value = "";
+                      ndxEpisode.Attributes["Name"].Value = "";
+                    } else {
+                      ndxSeason.Attributes["Name"].Value = "";
+                      ndxEpisode.Attributes["Name"].Value = "";
+                    }
+                  }
+                }
+              }
             }
           }
           // Save the adapted CMDI
@@ -637,6 +713,36 @@ namespace opsubRpc {
         return true;
       } catch (Exception ex) {
         errHandle.DoError("oprConv/findDuplicates", ex);
+        return false;
+      }
+    }
+
+    /* -------------------------------------------------------------------------------------
+      * Name:        addMultiInfo
+      * Goal:        Add information as <List> + items under [ndxMovie]
+      * History:
+      * 24/feb/2016 ERK Created
+        ------------------------------------------------------------------------------------- */
+    private bool addMultiInfo(XmlNode ndxMovie, XmlNamespaceManager nsFolia, String sType, String sList) {
+      try {
+        XmlNode ndxList = ndxMovie.SelectSingleNode("./child::f:"+sType+"List", nsFolia);
+        if (ndxList == null) {
+          ndxList = oTools.AddXmlChild(ndxMovie, sType + "List");
+        } else {
+          // Remove any previous countries
+          ndxList.RemoveAll();
+        }
+        String[] arList = sList.Split(',');
+        for (int j = 0; j < arList.Length; j++) {
+          String sOneItem = arList[j].Trim();
+          oTools.AddXmlChild(ndxList, sType,
+            sType + "Id", Convert.ToString(j + 1), "attribute",
+            "", sOneItem, "text");
+        }
+
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("oprConv/addMultiInfo", ex);
         return false;
       }
     }

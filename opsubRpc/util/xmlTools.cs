@@ -102,6 +102,10 @@ namespace opsubRpc.util {
               // Append this node as child
               ndxThis.AppendChild(ndxChild);
               break;
+            case "text":
+              // Add the text as inner text
+              ndxThis.InnerText = arValue[intI+1];
+              break;
             default:
               // There is no other option yet, so return failure
               return null;

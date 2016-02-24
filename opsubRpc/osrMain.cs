@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.IO;
 using System.Threading.Tasks;
+using omdb;
 
 namespace opsubRpc {
   /* -------------------------------------------------------------------------------------
@@ -65,9 +66,11 @@ namespace opsubRpc {
         }
         // Check presence of input/output
         if (sInput == "" ) { SyntaxError("2"); return; }
+
         // Initialize the main entry point for the conversion
         oprConv objConv = new oprConv(errHandle);
         osrMovie objMovie = new osrMovie(errHandle);
+        omdbapi objOmdb = new omdbapi(errHandle);
 
         // Set directory for conversion
         objConv.dirRoot(sOutput);
@@ -77,14 +80,15 @@ namespace opsubRpc {
 
         // Check if the input is a directory or file
         if (Directory.Exists(sInput)) {
-          WalkDirectoryTree(sInput, "*.folia.xml.gz", sInput, bForce, bSkip, bIsDebug, sAction, ref objConv, ref objMovie);
+          WalkDirectoryTree(sInput, "*.folia.xml.gz", sInput, bForce, bSkip, bIsDebug, sAction, 
+            ref objConv, ref objMovie);
         } else {
           // Show we don't have input file
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
         }
         // Calculate for each file which others are close to it
         // Also try to determine the license information for the best matching .cmdi.xml files.
-        objConv.findDuplicates(ref lSubInst, 3);
+        objConv.findDuplicates(ref lSubInst, 3, ref objOmdb);
 
         // Create an overview - if required
         if (bOview) {
@@ -114,8 +118,9 @@ namespace opsubRpc {
     /// <param name="sAction">The action to be taken: "cmdi", "hash"</param>
     /// <param name="objConv"></param>
     /// <param name="objMovie"></param>
-    static void WalkDirectoryTree(String sStartDir, String sFilter, String sInput,
-      bool bForce, bool bSkip, bool bIsDebug, String sAction, ref oprConv objConv, ref osrMovie objMovie) {
+    /// <param name="objOmdb"></param>
+    static void WalkDirectoryTree(String sStartDir, String sFilter, String sInput, bool bForce, 
+      bool bSkip, bool bIsDebug, String sAction, ref oprConv objConv, ref osrMovie objMovie) {
       String[] arFiles = null;
       String[] arSubDirs = null;
 

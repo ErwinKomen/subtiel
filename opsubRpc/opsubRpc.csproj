@@ -68,6 +68,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="conv\XmlConv.cs" />
+    <Compile Include="omdb\MovieInfo.cs" />
+    <Compile Include="omdb\omdbapi.cs" />
     <Compile Include="oprConv.cs" />
     <Compile Include="osrMain.cs" />
     <Compile Include="osrMovie.cs" />
