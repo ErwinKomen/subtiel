@@ -11,7 +11,7 @@ using opsubRpc;
 
 namespace omdb {
   class omdbapi {
-    private String sApiStart = "http://www.omdbapi.com/?i=@tt&plot=short&r=xml";
+    private String sApiStart = "http://www.omdbapi.com/?i=@tt&plot=full&r=xml";
     private int iBufSize = 1024;
     private ErrHandle errHandle;
     /*

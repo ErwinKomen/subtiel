@@ -23,6 +23,7 @@ namespace opsubRpc {
     static void Main(string[] args) {
       String sInput = "";       // Input file or dir
       String sOutput = "/scratch/ekomen/out/";      // Output directory, if specified
+      String sDict = "";        // Movie dictionary
       bool bIsDebug = false;    // Debugging
       bool bForce = false;      // Force
       bool bOview = false;      // Make overview or not
@@ -45,6 +46,9 @@ namespace opsubRpc {
                 break;
               case "s": // Skip
                 bSkip = true;
+                break;
+              case "m": // Movie dictionary   -- Tab-separated list from opensubtitles.org
+                sDict = args[++i];
                 break;
               case "o": // Output directory
                 sOutput = args[++i];
@@ -75,6 +79,12 @@ namespace opsubRpc {
         // Set directory for conversion
         objConv.dirRoot(sOutput);
 
+        // Load the movie dictionary
+        if (!objConv.loadMovieDictionary(sDict)) {
+          errHandle.DoError("Main", "Could not load movie dictionary from [" + sDict + "]");
+          return;
+        }
+
         // Initialise the Treebank Xpath functions, which may make use of tb:matches()
         util.XPathFunctions.conTb.AddNamespace("tb", util.XPathFunctions.TREEBANK_EXTENSIONS);
 
@@ -87,7 +97,8 @@ namespace opsubRpc {
           errHandle.DoError("Main", "Cannot find input file(s) in: " + sInput);
         }
         // Calculate for each file which others are close to it
-        // Also try to determine the license information for the best matching .cmdi.xml files.
+        // - try to determine the license information for the best matching .cmdi.xml files
+        // - add some more meta-information to the .cmdi.xml files
         objConv.findDuplicates(ref lSubInst, 3, ref objOmdb);
 
         // Create an overview - if required

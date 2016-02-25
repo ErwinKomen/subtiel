@@ -20,7 +20,7 @@ namespace opsubRpc {
       pdxMovie = new XmlDocument();
     }
     // ==================== METHODS ============================================
-    public bool getInformation(String sId, ref XmlNodeList ndList) {
+    public bool getInformation(String sId, ref XmlNodeList ndList, ref XmlNode ndMovie) {
       try {
         // Check if we currently have information on this movie
         if (sId != this.idMovie) {
@@ -36,7 +36,7 @@ namespace opsubRpc {
         }
         // Set the list of nodes for this move
         ndList = pdxMovie.SelectNodes("./descendant::subtitle");
-
+        ndMovie = pdxMovie.SelectSingleNode("./descendant::Movie");
         return true;
       } catch (Exception ex) {
         errHandle.DoError("osrMoview/getInformation", ex);

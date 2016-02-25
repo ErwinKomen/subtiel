@@ -16,6 +16,9 @@ namespace opsubRpc {
     private ErrHandle errHandle = null;
     private static string CLARIN_CMDI = "http://www.clarin.eu/cmd/";
     private String sCmdiXsd = "http://erwinkomen.ruhosting.nl/xsd/SUBTIEL.xsd";
+    private Dictionary<String, String> dicMovie = new Dictionary<string, string>();
+    private String sDicSource = "";   // Source file for [dicMovie]
+    private bool bInit = false;
     /*
     private String sCmdiBase = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
         "<CMD xmlns = \"http://www.clarin.eu/cmd/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" CMDVersion=\"1.1\" xsi:schemaLocation=\"http://www.clarin.eu/cmd/ http://catalog.clarin.eu/ds/ComponentRegistry/rest/registry/profiles/clarin.eu:cr1:p_1328259700943/xsd\">" +
@@ -90,9 +93,9 @@ namespace opsubRpc {
           String sIdSubtitle = ndxHeader.SelectSingleNode("./child::f:meta[@id = 'idsubtitle']", nsFolia).InnerText;
           String sIdMovie = ndxHeader.SelectSingleNode("./child::f:meta[@id = 'idmovie']", nsFolia).InnerText;
           // Check if we already have information from this idmovie
-          XmlNodeList ndxList = null;
-          if (objMovie.getInformation(sIdMovie, ref ndxList)) {
-            bool bHaveInfo = false; XmlNode ndxSubtitle = null;
+          XmlNodeList ndxList = null; XmlNode ndxMovie = null;
+          if (objMovie.getInformation(sIdMovie, ref ndxList, ref ndxMovie)) {
+            bool bHaveInfo = false; XmlNode ndxSubtitle = null; 
             // Walk the list to get the correct subtitle production for this movie
             for (int i=0;i<ndxList.Count;i++) {
               // Access this <subtitle> object
@@ -128,6 +131,15 @@ namespace opsubRpc {
               String sMovieKind = oTools.getXmlChildValue(ref ndxSubtitle, "MovieKind");
               String sSubTranslator = oTools.getXmlChildValue(ref ndxSubtitle, "SubTranslator");
               String sSubLanguage = oTools.getXmlChildValue(ref ndxSubtitle, "ISO639");
+              // Additional information from the MOVIE
+              String sSeriesName = oTools.getXmlChildValue(ref ndxMovie, "SeriesName");
+              String sEpisodeName = oTools.getXmlChildValue(ref ndxMovie, "EpisodeName");
+              String sMoviePlot = oTools.getXmlChildValue(ref ndxMovie, "MoviePlot");
+              // Possibly get information from other places
+              if (sMovieYear == "") sMovieYear = oTools.getXmlChildValue(ref ndxMovie, "MovieYear");
+              if (sMovieKind == "") sMovieKind = oTools.getXmlChildValue(ref ndxMovie, "MovieKind");
+              if (sSeriesSeason == "") sSeriesSeason = oTools.getXmlChildValue(ref ndxMovie, "SeriesSeason");
+              if (sSeriesEpisode == "") sSeriesEpisode = oTools.getXmlChildValue(ref ndxMovie, "SeriesEpisode");
               // Progress
               errHandle.Status("Processing movie " + sIdMovie + " subtitle " + sIdSubtitle);
               // Create the .cmdi information
@@ -151,13 +163,16 @@ namespace opsubRpc {
               oSubt.Movie.Year = sMovieYear;
               oSubt.Movie.ImdbId = sMovieImdbId;
               oSubt.Movie.Kind = sMovieKind;
+              oSubt.Movie.Plot = sMoviePlot;
               // (2b) Should we add a Series part?
               if (sSeriesSeason != "" || sSeriesEpisode != "" || sSeriesImdbParent != "") {
                 // Add a Series part
                 oSubtiel.Components.SUBTIEL.Movie.Series = new CMDComponentsSUBTIELMovieSeries();
-                oSubt.Movie.Series.Season = sSeriesSeason;
-                oSubt.Movie.Series.Episode = sSeriesEpisode;
+                oSubt.Movie.Series.Season.Value = sSeriesSeason;
+                oSubt.Movie.Series.Episode.Value = sSeriesEpisode;
                 oSubt.Movie.Series.ParentImdbId = sSeriesImdbParent;
+                oSubt.Movie.Series.Season.Name = sSeriesName;
+                oSubt.Movie.Series.Episode.Name = sEpisodeName;
               }
               // (2c) Add a Release part
               oSubtiel.Components.SUBTIEL.Release = new CMDComponentsSUBTIELRelease();
@@ -508,6 +523,60 @@ namespace opsubRpc {
           // Zoek het <Subtitle> element 
           XmlNode ndxSubtitle = pdxCmdi.SelectSingleNode("./descendant::f:Subtitle", nsFolia);
           if (ndxSubtitle != null) {
+            // Get the movie id
+            XmlNode ndxMovieId = pdxCmdi.SelectSingleNode("./descendant::f:MovieId", nsFolia);
+            String sIdMovie = ndxMovieId.InnerText;
+            // Get the list of languages
+            String sSubLangs = "";
+            if (!getSubtitleLanguages(sIdMovie, ref sSubLangs)) return false;
+            // Remove any available list
+            XmlNode ndxAvailableList = ndxSubtitle.SelectSingleNode("./child::f:AvailableList", nsFolia);
+            if (ndxAvailableList != null) {
+              ndxAvailableList.RemoveAll();
+              ndxSubtitle.RemoveChild(ndxAvailableList);
+              XmlNode ndxTmp = ndxSubtitle.SelectSingleNode("./child::f:languageAvailable", nsFolia);
+              if (ndxTmp != null) {
+                ndxTmp.RemoveAll();
+                ndxSubtitle.RemoveChild(ndxTmp);
+              }
+            }
+            /*
+            // Convert this list to an array
+            String[] arNumLng = sSubLangs.Split(' ');
+            // Make sure we have an "AvailableList"
+            XmlNode ndxAvailableList = ndxSubtitle.SelectSingleNode("./child::f:AvailableList", nsFolia);
+            if (ndxAvailableList == null) ndxAvailableList = oTools.AddXmlChild(ndxSubtitle, "AvailableList");
+            // Add the list of languages in which subtitles are available
+            for (int j=0;j<arNumLng.Length;j+=2) {
+              // Get the information
+              int iNum = Convert.ToInt32(arNumLng[j]);
+              String sLng = arNumLng[j + 1];
+              // Check if this item is already here
+              XmlNode ndxAvail = ndxAvailableList.SelectSingleNode(
+                "./child::f:Available[@Number="+Convert.ToString(iNum) +
+                " and @Source='"+this.sDicSource+ "' and text() = '" + sLng + "']", nsFolia);
+              if (ndxAvail== null) {
+                // Add it
+                oTools.AddXmlChild(ndxAvailableList, "Available",
+                  "Number", Convert.ToString(iNum), "attribute",
+                  "Source", sDicSource, "attribute", 
+                  "", sLng, "text");
+              }
+            } */
+            // Adapt the language-available string slightly 
+            // NO -- leave as is: sSubLangs = "[" + sSubLangs + "]";
+
+            // Process the languages available list:
+            XmlNode ndxLngAvail = ndxSubtitle.SelectSingleNode("./child::f:languageAvailable", nsFolia);
+            if (ndxLngAvail == null) {
+              ndxLngAvail = oTools.AddXmlChild(ndxSubtitle, "languageAvailable", "", sSubLangs, "text");
+            } else {
+              // Check if this string is already in there
+              if (!ndxLngAvail.InnerText.Contains(sSubLangs)) {
+                // Add the string
+                ndxLngAvail.InnerText = ndxLngAvail.InnerText + " " + sSubLangs;
+              }
+            }
             // Check if there is a statusinfo child
             XmlNode ndxStatusInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
             if (ndxStatusInfo == null) {
@@ -602,8 +671,6 @@ namespace opsubRpc {
                 // Adapt the target directory
                 XmlNode ndxYear = pdxCmdi.SelectSingleNode("./descendant::f:Year", nsFolia);
                 XmlNode ndxImdbId = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
-                // errHandle.Status("findDuplicates - point #11: " + ((ndxYear == null) ? "null" : ""));
-                // errHandle.Status("findDuplicates - point #12: " + ((ndxImdbId == null) ? "null" : ""));
                 String sYear = ndxYear.InnerText;
                 String sImdbId = ndxImdbId.InnerText;
                 // Determine the target directory...
@@ -625,6 +692,7 @@ namespace opsubRpc {
             // Movie information needs to be gathered *ALWAYS*
             XmlNode ndxImdbId = ndxMovie.SelectSingleNode("./child::f:ImdbId", nsFolia);
             String sImdbId = ndxImdbId.InnerText;
+            // Get the movie information
             MovieInfo oInfo = objOmdb.getInfo(sImdbId);
             if (oInfo == null) {
               // Not sure what to do now
@@ -841,6 +909,87 @@ namespace opsubRpc {
     private void SubtielCompleted(object sender, System.ComponentModel.AsyncCompletedEventArgs e) {
       errHandle.Status("Download completed!");
     }
+
+    /// <summary>
+    /// getSubtitleLanguages --
+    ///     Get the available subtitle languages from the @sIdMovie
+    ///     
+    /// </summary>
+    /// <param name="sIdMovie"></param>
+    /// <param name="sLanguages"></param>
+    /// <returns>boolean</returns>
+    private bool getSubtitleLanguages(String sIdMovie, ref String sLanguageList) {
+      // String sLanguageList;
+      try {
+        // Locate the movie's informatin through its id
+        if (!bInit) return false;
+        // Locate the movie's name
+        if (dicMovie.ContainsKey(sIdMovie)) {
+          dicMovie.TryGetValue(sIdMovie, out sLanguageList);
+        } else {
+          sLanguageList = "(no languages)";
+        }
+
+        // Return positively
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("getSubtitleLanguages", ex); // Provide standard error message
+        return false;
+      }
+    }
+    
+    /// <summary>
+         /// loadMovieDictionary ---
+         ///     Load the movie dictionary
+         /// </summary>
+         /// <param name="sFileIn"></param>
+         /// <returns></returns>
+    public bool loadMovieDictionary(String sFileIn) {
+      try {
+        // Validate
+        if (!File.Exists(sFileIn)) return false;
+        // Load the file into an array
+        String[] arLine = File.ReadAllLines(sFileIn);
+        this.dicMovie.Clear();
+        for (int i = 0; i < arLine.Length; i++) {
+          String sLine = arLine[i];
+          if (sLine != "") {
+            // Get this line
+            String[] arPart = sLine.Split('\t');
+            if (arPart.Length > 2) {
+              // Get the id and the name
+              String sIdMovie = arPart[0];
+              String sLanguageList = arPart[2].Trim();
+              // Possibly take off leading and ending quotation marks
+              if (sLanguageList.StartsWith("\"") && sLanguageList.EndsWith("\"")) {
+                sLanguageList = sLanguageList.Substring(1, sLanguageList.Length - 2).Trim();
+              }
+              // Does this item already exist?
+              if (dicMovie.ContainsKey(sIdMovie)) {
+                // Check if it is already there
+                if (!dicMovie[sIdMovie].Contains(sLanguageList)) {
+                  // Add the language list information to what is available already
+                  dicMovie[sIdMovie] += sLanguageList;
+                }
+              } else {
+                // Store it in the dictionary
+                dicMovie.Add(sIdMovie, sLanguageList);
+              }
+            }
+          }
+        }
+        // Set the dicsource value
+        this.sDicSource = Path.GetFileNameWithoutExtension(sFileIn);
+
+        // Return positively
+        bInit = true;
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("loadMovieDictionary", ex); // Provide standard error message
+        return false;
+      }
+    }
+
 
 
   }

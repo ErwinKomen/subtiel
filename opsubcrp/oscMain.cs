@@ -43,7 +43,7 @@ namespace opsubcrp {
               case "o": // Output directory
                 sOutput = args[++i];
                 break;
-              case "m": // Movie dictionary
+              case "m": // Movie dictionary   -- Tab-separated list from opensubtitles.org
                 sDict = args[++i];
                 break;
               case "2":
