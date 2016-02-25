@@ -441,7 +441,7 @@ namespace opsubRpc {
 
         // Walk through all the instances again
         for (int i = 0; i < lSubInst.Count; i++) {
-          String sTargetDir = sDirRoot+"opus/";   // Directory where we will store the result
+          String sTargetDir = sDirRoot;   // Directory where we will store the result
 
           // Get this instance
           SubInstance oOrg = lSubInst[i];
@@ -622,60 +622,56 @@ namespace opsubRpc {
           // Zoek het <Movie> element 
           XmlNode ndxMovie = pdxCmdi.SelectSingleNode("./descendant::f:Movie", nsFolia);
           if (ndxMovie != null) {
-            // Check if this has a Runtime component
-            XmlNode ndxRuntime = ndxMovie.SelectSingleNode("./child::f:Runtime", nsFolia);
-            if (ndxRuntime == null) {
-              // If there is no runtime information, movie information needs to be gathered
-              XmlNode ndxImdbId = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
-              String sImdbId = ndxImdbId.InnerText;
-              MovieInfo oInfo = objOmdb.getInfo(sImdbId);
-              if (oInfo == null) {
-                // Not sure what to do now
-                int iError = 1;
-              } else {
-                // (1) Add the runtime information
-                ndxRuntime = oTools.AddXmlChild(ndxMovie, "Runtime");
-                ndxRuntime.InnerText = oInfo.runtime;
-                // (2) Add the COUNTRY information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Country", oInfo.country)) return false;
-                // (3) Add the GENRE information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Genre", oInfo.genre)) return false;
-                // (4) Add the LANGUAGE information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Language", oInfo.language)) return false;
-                // (5) Add the DIRECTOR information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Director", oInfo.director)) return false;
-                // (6) Add the WRITER information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Writer", oInfo.writer)) return false;
-                // (7) Add the ACTOR information
-                if (!addMultiInfo(ndxMovie, nsFolia, "Actor", oInfo.actors)) return false;
-                // (8) Add other information: rated, released, plot, awards, imdbRating, imdbVotes
-                oTools.AddXmlChild(ndxMovie, "Rated", "", oInfo.rated, "text");
-                oTools.AddXmlChild(ndxMovie, "Released", "", oInfo.released, "text");
-                oTools.AddXmlChild(ndxMovie, "Plot", "", oInfo.plot, "text");
-                oTools.AddXmlChild(ndxMovie, "Awards", "", oInfo.awards, "text");
-                oTools.AddXmlChild(ndxMovie, "imdbRating", "", oInfo.imdbRating, "text");
-                oTools.AddXmlChild(ndxMovie, "imdbVotes", "", oInfo.imdbVotes.Replace(",", ""), "text");
-                // (9) Look for the <Series>...
-                XmlNode ndxSeries = pdxCmdi.SelectSingleNode("./descendant::f:Series", nsFolia);
-                if (ndxSeries != null) {
-                  // Get the nodes we are interested in
-                  XmlNode ndxSeason = ndxSeries.SelectSingleNode("./child::f:Season", nsFolia);
-                  XmlNode ndxEpisode = ndxSeries.SelectSingleNode("./child::f:Episode", nsFolia);
-                  XmlNode ndxParent = ndxSeries.SelectSingleNode("./child::f:ParentImdbId", nsFolia);
-                  MovieInfo oParent = null;
-                  if (ndxParent != null && ndxParent.InnerText != "") {
-                    String sParentImdbId = ndxParent.InnerText;
-                    oParent = objOmdb.getInfo(sParentImdbId);
-                  }
-                  // Add the season/episode information
-                  if (ndxSeason != null && ndxEpisode != null) {
-                    if (oParent== null) {
-                      ndxSeason.Attributes["Name"].Value = "";
-                      ndxEpisode.Attributes["Name"].Value = "";
-                    } else {
-                      ndxSeason.Attributes["Name"].Value = "";
-                      ndxEpisode.Attributes["Name"].Value = "";
-                    }
+            // Movie information needs to be gathered *ALWAYS*
+            XmlNode ndxImdbId = ndxMovie.SelectSingleNode("./child::f:ImdbId", nsFolia);
+            String sImdbId = ndxImdbId.InnerText;
+            MovieInfo oInfo = objOmdb.getInfo(sImdbId);
+            if (oInfo == null) {
+              // Not sure what to do now
+              int iError = 1;
+              errHandle.Status("findDuplicates: could not get information for imdb="+sImdbId);
+            } else {
+              // (1) Add the runtime information
+              if (!addOneInfo(ndxMovie, nsFolia, "Runtime", oInfo.runtime)) return false;
+              // (2) Add the COUNTRY information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Country", oInfo.country)) return false;
+              // (3) Add the GENRE information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Genre", oInfo.genre)) return false;
+              // (4) Add the LANGUAGE information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Language", oInfo.language)) return false;
+              // (5) Add the DIRECTOR information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Director", oInfo.director)) return false;
+              // (6) Add the WRITER information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Writer", oInfo.writer)) return false;
+              // (7) Add the ACTOR information
+              if (!addMultiInfo(ndxMovie, nsFolia, "Actor", oInfo.actors)) return false;
+              // (8) Add other information: rated, released, plot, awards, imdbRating, imdbVotes
+              if (!addOneInfo(ndxMovie, nsFolia, "Rated", oInfo.rated)) return false;
+              if (!addOneInfo(ndxMovie, nsFolia, "Released", oInfo.released)) return false;
+              if (!addOneInfo(ndxMovie, nsFolia, "Plot", oInfo.plot)) return false;
+              if (!addOneInfo(ndxMovie, nsFolia, "Awards", oInfo.awards)) return false;
+              if (!addOneInfo(ndxMovie, nsFolia, "imdbRating", oInfo.imdbRating)) return false;
+              if (!addOneInfo(ndxMovie, nsFolia, "imdbVotes", oInfo.imdbVotes.Replace(",", ""))) return false;
+              // (9) Look for the <Series>...
+              XmlNode ndxSeries = pdxCmdi.SelectSingleNode("./descendant::f:Series", nsFolia);
+              if (ndxSeries != null) {
+                // Get the nodes we are interested in
+                XmlNode ndxSeason = ndxSeries.SelectSingleNode("./child::f:Season", nsFolia);
+                XmlNode ndxEpisode = ndxSeries.SelectSingleNode("./child::f:Episode", nsFolia);
+                XmlNode ndxParent = ndxSeries.SelectSingleNode("./child::f:ParentImdbId", nsFolia);
+                MovieInfo oParent = null;
+                if (ndxParent != null && ndxParent.InnerText != "") {
+                  String sParentImdbId = ndxParent.InnerText;
+                  oParent = objOmdb.getInfo(sParentImdbId);
+                }
+                // Add the season/episode information
+                if (ndxSeason != null && ndxEpisode != null) {
+                  if (oParent== null) {
+                    oTools.AddAttribute(ndxSeason, "Name", "");
+                    oTools.AddAttribute(ndxEpisode, "Name", "");
+                  } else {
+                    oTools.AddAttribute(ndxSeason, "Name", "");
+                    oTools.AddAttribute(ndxEpisode, "Name", "");
                   }
                 }
               }
@@ -718,6 +714,29 @@ namespace opsubRpc {
     }
 
     /* -------------------------------------------------------------------------------------
+      * Name:        addOneInfo
+      * Goal:        Add information as <List> + items under [ndxMovie]
+      * History:
+      * 24/feb/2016 ERK Created
+        ------------------------------------------------------------------------------------- */
+    private bool addOneInfo(XmlNode ndxMovie, XmlNamespaceManager nsFolia, String sType, String sValue) {
+      try {
+        XmlNode ndxTarget = ndxMovie.SelectSingleNode("./child::f:" + sType, nsFolia);
+        if (ndxTarget == null) {
+          // Add a new child
+          ndxTarget = oTools.AddXmlChild(ndxMovie, sType);
+        }
+        // Adapt the value of the child
+        ndxTarget.InnerText = sValue;
+        // Return positively
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("oprConv/addOneInfo", ex);
+        return false;
+      }
+    }
+
+    /* -------------------------------------------------------------------------------------
       * Name:        addMultiInfo
       * Goal:        Add information as <List> + items under [ndxMovie]
       * History:
@@ -729,11 +748,12 @@ namespace opsubRpc {
         if (ndxList == null) {
           ndxList = oTools.AddXmlChild(ndxMovie, sType + "List");
         } else {
-          // Remove any previous countries
+          // Remove any previous CHILDREN
           ndxList.RemoveAll();
         }
         String[] arList = sList.Split(',');
         for (int j = 0; j < arList.Length; j++) {
+          // Find out what the item is
           String sOneItem = arList[j].Trim();
           oTools.AddXmlChild(ndxList, sType,
             sType + "Id", Convert.ToString(j + 1), "attribute",

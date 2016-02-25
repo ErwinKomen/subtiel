@@ -84,12 +84,16 @@ namespace opsubRpc.util {
           // Action depends on the type of value
           switch (arValue[intI + 2]) {
             case "attribute":
-              // Create attribute
-              atxChild = pdxDoc.CreateAttribute(arValue[intI]);
-              // Fillin value of this attribute
+              // Is the attribute there already?
+              atxChild = ndxThis.Attributes[arValue[intI]];
+              if (atxChild == null) {
+                // Create attribute
+                atxChild = pdxDoc.CreateAttribute(arValue[intI]);
+                // Append attribute to this node
+                ndxThis.Attributes.Append(atxChild);
+              } 
+              // Fill in value of this attribute
               atxChild.Value = arValue[intI + 1];
-              // Append attribute to this node
-              ndxThis.Attributes.Append(atxChild);
               break;
             case "child":
               // Create this node
@@ -97,10 +101,10 @@ namespace opsubRpc.util {
                 ndxChild = pdxDoc.CreateNode(XmlNodeType.Element, arValue[intI], null);
               else
                 ndxChild = pdxDoc.CreateNode(XmlNodeType.Element, arValue[intI], strNs);
-              // Fill in the value of this node
-              ndxChild.InnerText = arValue[intI + 1];
               // Append this node as child
               ndxThis.AppendChild(ndxChild);
+              // Fill in the value of this node
+              ndxChild.InnerText = arValue[intI + 1];
               break;
             case "text":
               // Add the text as inner text
