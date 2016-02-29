@@ -113,8 +113,15 @@ namespace opsubRpc {
                 }
               }
             }
+            // ============= DEBUGGING ===
+            if (!bHaveInfo && sIdMovie == "36797") {
+              int iDebug = 1;
+            }
             // Validate
             if (bHaveInfo) {
+              if (sIdMovie == "36797") {
+                int iDebug = 1;
+              }
               // Get the information we need
               String sUserId = oTools.getXmlChildValue(ref ndxSubtitle, "UserID");
               String sUserNickName = oTools.getXmlChildValue(ref ndxSubtitle, "UserNickName");
@@ -168,11 +175,13 @@ namespace opsubRpc {
               if (sSeriesSeason != "" || sSeriesEpisode != "" || sSeriesImdbParent != "") {
                 // Add a Series part
                 oSubtiel.Components.SUBTIEL.Movie.Series = new CMDComponentsSUBTIELMovieSeries();
+                oSubt.Movie.Series.Season = new CMDComponentsSUBTIELMovieSeriesSeason();
                 oSubt.Movie.Series.Season.Value = sSeriesSeason;
-                oSubt.Movie.Series.Episode.Value = sSeriesEpisode;
-                oSubt.Movie.Series.ParentImdbId = sSeriesImdbParent;
                 oSubt.Movie.Series.Season.Name = sSeriesName;
+                oSubt.Movie.Series.Episode = new CMDComponentsSUBTIELMovieSeriesEpisode();
+                oSubt.Movie.Series.Episode.Value = sSeriesEpisode;
                 oSubt.Movie.Series.Episode.Name = sEpisodeName;
+                oSubt.Movie.Series.ParentImdbId = sSeriesImdbParent;
               }
               // (2c) Add a Release part
               oSubtiel.Components.SUBTIEL.Release = new CMDComponentsSUBTIELRelease();

@@ -23,6 +23,7 @@ namespace opsubRpc {
     static void Main(string[] args) {
       String sInput = "";       // Input file or dir
       String sOutput = "/scratch/ekomen/out/";      // Output directory, if specified
+      String sLanguage = "dut";                     // This is the language abbreviation used in [osrMovie.cs] for sBaseUrl
       String sDict = "";        // Movie dictionary
       bool bIsDebug = false;    // Debugging
       bool bForce = false;      // Force
@@ -62,6 +63,9 @@ namespace opsubRpc {
               case "d": // Debugging
                 bIsDebug = true;
                 break;
+              case "l": // Language (three letter code)
+                sLanguage = args[++i];
+                break;
             }
           } else {
             // Throw syntax error and leave
@@ -73,7 +77,7 @@ namespace opsubRpc {
 
         // Initialize the main entry point for the conversion
         oprConv objConv = new oprConv(errHandle);
-        osrMovie objMovie = new osrMovie(errHandle);
+        osrMovie objMovie = new osrMovie(errHandle, sLanguage);
         omdbapi objOmdb = new omdbapi(errHandle);
 
         // Set directory for conversion

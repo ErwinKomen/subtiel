@@ -98,8 +98,8 @@ namespace opsubcrp {
         }
 
         // Check if we need to continue
-        if ((!bForce || bMulti) && iMax == 1) {
-          debug("Skipping: " + sFileIn);
+        if (bMulti && iMax == 1) {
+          debug("Skipping (non-multi): " + sFileIn);
           return true;
         }
 
@@ -115,6 +115,12 @@ namespace opsubcrp {
        // String sFileTmp = Path.GetFullPath(sDstBare + ".xml");
         String sFileOut = Path.GetFullPath(sDstBare + ".folia.xml");
         String sFileOutZ = Path.GetFullPath(sDstBare + ".folia.xml.gz");
+
+        // Check if output file already exists
+        if (bForce && File.Exists(sFileOutZ)) {
+          debug("Skipping existing: " + sFileIn);
+          return true;
+        }
 
         // Other initialisations before the conversion starts
         OpsToFolia objOpsFolia = new OpsToFolia(errHandle);

@@ -10,14 +10,24 @@ namespace opsubRpc {
   class osrMovie {
     // ==================== LOCAL VARIABLES ====================================
     private ErrHandle errHandle = null;
-    private static String sBaseUrl = "http://www.opensubtitles.org/nl/search/sublanguageid-dut/";
+    private String sBaseUrl = "http://www.opensubtitles.org/nl/search/sublanguageid-dut/";
     private String idMovie; // The idmovie used by opensubtitles for this movie
     private XmlDocument pdxMovie = null;
     // ==================== Class initializer ==================================
-    public osrMovie(ErrHandle oErr) {
+    public osrMovie(ErrHandle oErr, String sLanguage) {
       this.errHandle = oErr;
       idMovie = "";
       pdxMovie = new XmlDocument();
+      switch (sLanguage) {
+        case "dut":
+        case "nld":
+          // Tjhis is the default, so no action is required
+          break;
+        default:
+          // Switch to the indicated three-letter language
+          sBaseUrl = sBaseUrl.Replace("sublanguageid-dut", "sublanguageid-" + sLanguage);
+          break;
+      }
     }
     // ==================== METHODS ============================================
     public bool getInformation(String sId, ref XmlNodeList ndList, ref XmlNode ndMovie) {
@@ -33,6 +43,8 @@ namespace opsubRpc {
           }
           // Read as XmlDocument
           pdxMovie.LoadXml(sContent);
+          // Set the currnet idmovie
+          this.idMovie = sId;
         }
         // Set the list of nodes for this move
         ndList = pdxMovie.SelectNodes("./descendant::subtitle");
