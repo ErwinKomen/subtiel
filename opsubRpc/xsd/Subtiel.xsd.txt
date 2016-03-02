@@ -1,3 +1,5 @@
+
+
 <?xml version="1.0" encoding="UTF-8"?>
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ann="http://www.clarin.eu" xmlns:cmd="http://www.clarin.eu/cmd/" xmlns:dcr="http://www.isocat.org/ns/dcr" targetNamespace="http://www.clarin.eu/cmd/" elementFormDefault="qualified">
   <xs:annotation>
@@ -233,6 +235,15 @@
                           <xs:element name="Awards" type="xs:string" minOccurs="1" maxOccurs="1" ann:documentation="List of awards this movie / episode received" />
                           <xs:element name="imdbRating" type="xs:float" minOccurs="1" maxOccurs="1" ann:documentation="Rating given to this movie / episode.  (float)" />
                           <xs:element name="imdbVotes" type="xs:int" minOccurs="1" maxOccurs="1" ann:documentation="Number of people that voted for this movie / episode. (integer)" />
+                          <xs:element name="AltNameList" minOccurs="1" maxOccurs="1">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="AltName" type="xs:string" minOccurs="1" maxOccurs="unbounded" ann:documentation="One alternative name" ann:displaypriority="1" />
+                              </xs:sequence>
+                              <xs:attribute name="ref" type="xs:IDREFS" />
+                              <xs:attribute name="ComponentId" type="xs:anyURI" fixed="clarin.eu:cr1:c_1456409483197" />
+                            </xs:complexType>
+                          </xs:element>
                           <xs:element name="Series" minOccurs="1" maxOccurs="1">
                             <xs:complexType>
                               <xs:sequence>
@@ -257,6 +268,8 @@
                                 <xs:element name="ParentImdbId" type="xs:string" minOccurs="1" maxOccurs="1" ann:documentation="The imdbid of the overall series information" />
                               </xs:sequence>
                               <xs:attribute name="ref" type="xs:IDREFS" />
+                              <xs:attribute name="Name" type="xs:string" />
+                              <xs:attribute name="RootName" type="xs:string" />
                               <xs:attribute name="ComponentId" type="xs:anyURI" fixed="clarin.eu:cr1:c_1454489235454" />
                             </xs:complexType>
                           </xs:element>

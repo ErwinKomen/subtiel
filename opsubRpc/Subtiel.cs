@@ -1114,6 +1114,8 @@ public partial class CMDComponentsSUBTIELMovie {
     
     private int imdbVotesField;
     
+    private CMDComponentsSUBTIELMovieAltNameList altNameListField;
+    
     private CMDComponentsSUBTIELMovieSeries seriesField;
     
     private CMDComponentsSUBTIELMovieLanguageList languageListField;
@@ -1257,6 +1259,16 @@ public partial class CMDComponentsSUBTIELMovie {
     }
     
     /// <opmerkingen/>
+    public CMDComponentsSUBTIELMovieAltNameList AltNameList {
+        get {
+            return this.altNameListField;
+        }
+        set {
+            this.altNameListField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
     public CMDComponentsSUBTIELMovieSeries Series {
         get {
             return this.seriesField;
@@ -1355,6 +1367,58 @@ public partial class CMDComponentsSUBTIELMovie {
 [System.Diagnostics.DebuggerStepThroughAttribute()]
 [System.ComponentModel.DesignerCategoryAttribute("code")]
 [System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true, Namespace="http://www.clarin.eu/cmd/")]
+public partial class CMDComponentsSUBTIELMovieAltNameList {
+    
+    private string[] altNameField;
+    
+    private string refField;
+    
+    private string componentIdField;
+    
+    public CMDComponentsSUBTIELMovieAltNameList() {
+        this.componentIdField = "clarin.eu:cr1:c_1456409483197";
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlElementAttribute("AltName")]
+    public string[] AltName {
+        get {
+            return this.altNameField;
+        }
+        set {
+            this.altNameField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlAttributeAttribute(DataType="IDREFS")]
+    public string @ref {
+        get {
+            return this.refField;
+        }
+        set {
+            this.refField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlAttributeAttribute(DataType="anyURI")]
+    public string ComponentId {
+        get {
+            return this.componentIdField;
+        }
+        set {
+            this.componentIdField = value;
+        }
+    }
+}
+
+/// <opmerkingen/>
+[System.CodeDom.Compiler.GeneratedCodeAttribute("xsd", "2.0.50727.3038")]
+[System.SerializableAttribute()]
+[System.Diagnostics.DebuggerStepThroughAttribute()]
+[System.ComponentModel.DesignerCategoryAttribute("code")]
+[System.Xml.Serialization.XmlTypeAttribute(AnonymousType=true, Namespace="http://www.clarin.eu/cmd/")]
 public partial class CMDComponentsSUBTIELMovieSeries {
     
     private CMDComponentsSUBTIELMovieSeriesSeason seasonField;
@@ -1364,6 +1428,10 @@ public partial class CMDComponentsSUBTIELMovieSeries {
     private string parentImdbIdField;
     
     private string refField;
+    
+    private string nameField;
+    
+    private string rootNameField;
     
     private string componentIdField;
     
@@ -1409,6 +1477,28 @@ public partial class CMDComponentsSUBTIELMovieSeries {
         }
         set {
             this.refField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlAttributeAttribute()]
+    public string Name {
+        get {
+            return this.nameField;
+        }
+        set {
+            this.nameField = value;
+        }
+    }
+    
+    /// <opmerkingen/>
+    [System.Xml.Serialization.XmlAttributeAttribute()]
+    public string RootName {
+        get {
+            return this.rootNameField;
+        }
+        set {
+            this.rootNameField = value;
         }
     }
     

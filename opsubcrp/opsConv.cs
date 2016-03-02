@@ -117,7 +117,7 @@ namespace opsubcrp {
         String sFileOutZ = Path.GetFullPath(sDstBare + ".folia.xml.gz");
 
         // Check if output file already exists
-        if (bForce && File.Exists(sFileOutZ)) {
+        if (!bForce && File.Exists(sFileOutZ)) {
           debug("Skipping existing: " + sFileIn);
           return true;
         }
@@ -376,12 +376,17 @@ namespace opsubcrp {
     /// <returns></returns>
     private bool FlushOpsToFolia(ref List<Sent> lSentBuf, ref XmlWriter wrFolia, int iCount, String sTimeEnd) {
       try {
+        // Validate
+        if (iCount == 0) return true;
         // Walk all the sentences preceding the current one
         for (int j = 0; j < iCount; j++) {
           String sClause = ""; String sBegin = ""; String sEnd = "";
 
           // Retrieve this sentence's buffer
           Sent oSentThis = lSentBuf[j];
+          // Validate: length of sentence buffer must be larger than 0
+          if (oSentThis.words.Count == 0) continue;
+
           // Start producing output for this sentence
           XmlDocument pdxTmp = new XmlDocument();
           util.xmlTools oTool = new util.xmlTools(this.errHandle);
@@ -653,21 +658,29 @@ namespace opsubcrp {
       this.words.Add(new WordBuf(sWord, sClass));
     }
     public void addStart(String sStartTime) {
+      // Validate
+      if (this.words.Count == 0) return;    // Just skip if there is no space
       // Get the last word in this buffer
       WordBuf wLast = this.words[this.words.Count - 1];
       wLast.s = sStartTime;
     }
     public void addLine(String sLineSrt) {
+      // Validate
+      if (this.words.Count == 0) return;    // Just skip if there is no space
       // Get the last word in this buffer
       WordBuf wLast = this.words[this.words.Count - 1];
       wLast.n = sLineSrt;
     }
     public void markStart() {
+      // Validate
+      if (this.words.Count == 0) return;    // Just skip if there is no space
       // Get the last word in this buffer
       WordBuf wLast = this.words[this.words.Count - 1];
       wLast.bStart = true;
     }
     public void markEnd() {
+      // Validate
+      if (this.words.Count == 0) return;    // Just skip if there is no space
       // Get the last word in this buffer
       WordBuf wLast = this.words[this.words.Count - 1];
       wLast.bEnd = true;

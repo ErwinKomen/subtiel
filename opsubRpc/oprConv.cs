@@ -140,8 +140,10 @@ namespace opsubRpc {
               String sSubLanguage = oTools.getXmlChildValue(ref ndxSubtitle, "ISO639");
               // Additional information from the MOVIE
               String sSeriesName = oTools.getXmlChildValue(ref ndxMovie, "SeriesName");
+              String sSeriesRootName = oTools.getXmlChildValue(ref ndxMovie, "SeriesRootName");
               String sEpisodeName = oTools.getXmlChildValue(ref ndxMovie, "EpisodeName");
               String sMoviePlot = oTools.getXmlChildValue(ref ndxMovie, "MoviePlot");
+              XmlNode ndxAKA = ndxMovie.SelectSingleNode("./descendant::MovieAKA");
               // Possibly get information from other places
               if (sMovieYear == "") sMovieYear = oTools.getXmlChildValue(ref ndxMovie, "MovieYear");
               if (sMovieKind == "") sMovieKind = oTools.getXmlChildValue(ref ndxMovie, "MovieKind");
@@ -171,13 +173,28 @@ namespace opsubRpc {
               oSubt.Movie.ImdbId = sMovieImdbId;
               oSubt.Movie.Kind = sMovieKind;
               oSubt.Movie.Plot = sMoviePlot;
+              // (2a') add one or more alternative name parts
+              oSubtiel.Components.SUBTIEL.Movie.AltNameList = new CMDComponentsSUBTIELMovieAltNameList();
+              if (ndxAKA != null) {
+                // Find alternative names
+                List<String> lstAlt = new List<string>();
+                while (ndxAKA != null) {
+                  lstAlt.Add(ndxAKA.InnerText);
+                  // Find next name
+                  ndxAKA = ndxAKA.SelectSingleNode("./following-sibling::MovieAKA");
+                }
+                // Add this list of names
+                oSubt.Movie.AltNameList.AltName = lstAlt.ToArray();
+              }
               // (2b) Should we add a Series part?
               if (sSeriesSeason != "" || sSeriesEpisode != "" || sSeriesImdbParent != "") {
                 // Add a Series part
                 oSubtiel.Components.SUBTIEL.Movie.Series = new CMDComponentsSUBTIELMovieSeries();
+                oSubt.Movie.Series.Name = sSeriesName;
+                oSubt.Movie.Series.RootName = sSeriesRootName;
                 oSubt.Movie.Series.Season = new CMDComponentsSUBTIELMovieSeriesSeason();
                 oSubt.Movie.Series.Season.Value = sSeriesSeason;
-                oSubt.Movie.Series.Season.Name = sSeriesName;
+                oSubt.Movie.Series.Season.Name = "";
                 oSubt.Movie.Series.Episode = new CMDComponentsSUBTIELMovieSeriesEpisode();
                 oSubt.Movie.Series.Episode.Value = sSeriesEpisode;
                 oSubt.Movie.Series.Episode.Name = sEpisodeName;
