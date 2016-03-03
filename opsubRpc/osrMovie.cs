@@ -34,12 +34,19 @@ namespace opsubRpc {
       try {
         // Check if we currently have information on this movie
         if (sId != this.idMovie) {
+          int iWaitTime = 1;    // Number of seconds to wait
           // Try get information
           String sUrl = sBaseUrl + "idmovie-" + sId + "/xml";
           String sContent = WebRequestGetData(sUrl);
-          while (!sContent.StartsWith ("<")) {
+          while (!sContent.StartsWith ("<") ) {
             // Try again
             sContent = WebRequestGetData(sUrl);
+            // Check what we receive back
+            if (sContent == null) {
+              // Indicate that this is a premature end
+              errHandle.Status("getInformation: webrequest time-out");
+              return false;
+            }
           }
           // Read as XmlDocument
           pdxMovie.LoadXml(sContent);
@@ -97,7 +104,7 @@ namespace opsubRpc {
     private string WebRequestGetData(string url) {
       System.Net.WebRequest req = null;
       System.Net.WebResponse resp = null;
-      int MAX_TRIES = 10;
+      int MAX_TRIES = 5;
 
       try {
         req = System.Net.WebRequest.Create(url);
@@ -110,13 +117,18 @@ namespace opsubRpc {
         int iTry = 0;
         do {
           try {
+            // Wait some time
+            System.Threading.Thread.Sleep(iTry * 1000);
+            if (iTry > 2) {
+              errHandle.Status("waiting: " + iTry + "[" + url + "]");
+            }
             resp = req.GetResponse();
             bFound = true;
           } catch (Exception ex) {
             bFound = false;
             iTry++;
           }
-        } while (!bFound || iTry > MAX_TRIES);
+        } while (!bFound && iTry < MAX_TRIES);
         if (resp == null) return null;
 
         using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream())) {

@@ -81,6 +81,7 @@ namespace opsubeng {
         if (arEN.Length == 0) return true;
 
         sName = sFileEn.Replace(".folia.xml", "");
+        String sNameNL = sFileNL.Replace(".folia.xml", "");
 
         // (4) Show what we are doing
         errHandle.Status("Process parallel between " + Path.GetFileNameWithoutExtension(sFileEn) + 
@@ -116,10 +117,21 @@ namespace opsubeng {
         for (int i=0; i<ndxSlist.Count;i++ ) {
           ndxSlist[i].Attributes.Remove(ndxSlist[i].Attributes["xmlns"]);
         }
+        // Make sure oTools is set correctly
+        oTools.SetXmlDocument(pdxEN, "http://ilk.uvt.nl/folia");
+        // Add an 'annotations' element
+        XmlNode ndxAnnot = pdxEN.SelectSingleNode("./descendant::f:annotations", nsEN);
+        if (ndxAnnot!= null) {
+          // Add my own
+          oTools.AddXmlChild(ndxAnnot, "alignment-annotation", 
+            "set", "trans", "attribute",
+            "annotator", "opsubeng", "attribute",
+            "annotatortype", "auto", "attribute",
+            "", "", "text");
+        }
  
         // (9) Walk through the Parallels
         XmlNode ndxParallel = ndxLinkGrp.SelectSingleNode("./child::link");
-        oTools.SetXmlDocument(pdxEN, "http://ilk.uvt.nl/folia");
         XmlNode ndxCmpAlignS = null;
         while (ndxParallel != null) {
           // Get the information from this link
@@ -145,25 +157,40 @@ namespace opsubeng {
             // Add a <complexalignment> child under the <complexalignments>
             XmlNode ndxCmpAlign = oTools.AddXmlChild(ndxCmpAlignS, "complexalignment");
             // Add the English source references
-            XmlNode ndxAlignEN = oTools.AddXmlChild(ndxCmpAlign, "alignment", "class", "original", "attribute");
+            XmlNode ndxAlignEN = oTools.AddXmlChild(ndxCmpAlign, "alignment",
+              "set", "trans", "attribute",
+              "class", "en", "attribute");
             // Do we have an English source?
             if (arSrcEN.Length > 0 && arSrcEN[0] != "") {
+              // Walk the array of source references
               for (int i = 0; i < arSrcEN.Length; i++) {
+                // Find the text for this element
+                String sIdEN = sName + ".p.1.s." + arSrcEN[i];
+                String sTextEN = pdxEN.SelectSingleNode("./descendant::f:s[@xml:id='" + sIdEN + "']/child::f:t", nsEN).InnerText;
+                // Add the <aref> element
                 oTools.AddXmlChild(ndxAlignEN, "aref",
                   "id", sName + ".p.1.s." + arSrcEN[i], "attribute",
+                  "t", sTextEN, "attribute",
                   "type", "s", "attribute");
               }
             }
             // Add the Dutch translation references
             XmlNode ndxAlignNL = oTools.AddXmlChild(ndxCmpAlign, "alignment",
-              "class", "translation", "attribute",
+              "set", "trans", "attribute",
+              "class", "nl", "attribute",
               "xlink:href", sFileNL, "attribute",
               "xlink:type", "simple", "attribute");
             // Do we have a Dutch translation?
             if (arDstNL.Length> 0 && arDstNL[0] != "") {
+              // Walk the array of destination references
               for (int i = 0; i < arDstNL.Length; i++) {
+                // Find the text for this element
+                String sIdNL = sNameNL + ".p.1.s." + arDstNL[i];
+                String sTextNL = pdxNL.SelectSingleNode("./descendant::f:s[@xml:id='" + sIdNL + "']/child::f:t", nsNL).InnerText;
+                // Add the <aref> element
                 oTools.AddXmlChild(ndxAlignNL, "aref",
                   "id", sName + ".p.1.s." + arDstNL[i], "attribute",
+                  "t", sTextNL, "attribute",
                   "type", "s", "attribute");
               }
             }
@@ -173,11 +200,19 @@ namespace opsubeng {
           ndxParallel = ndxParallel.SelectSingleNode("./following-sibling::link");
         }
 
- 
 
-        // (7) Determine the output file
 
+        /*
+        // (7) Create an appropriate XML writer
+        XmlWriterSettings settings = new XmlWriterSettings();
+        settings.Indent = true;
+        settings.CloseOutput = true;
+        XmlWriter wrEN = XmlWriter.Create(sFileTr, settings);
         // (?) Save the new output file
+        // pdxEN.Save(sFileTr);
+        pdxEN.Save(wrEN);
+        wrEN.Close();
+        */
         pdxEN.Save(sFileTr);
 
         return true;

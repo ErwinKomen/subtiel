@@ -84,6 +84,83 @@ namespace opsub.util {
           // Action depends on the type of value
           switch (arValue[intI + 2]) {
             case "attribute":
+              // Create attribute, checking for 'xlink'
+              if (arValue[intI].StartsWith("xlink:")) {
+                atxChild = pdxDoc.CreateAttribute(arValue[intI], "http://www.w3.org/1999/xlink");
+              } else {
+                atxChild = pdxDoc.CreateAttribute(arValue[intI]);
+              }
+              // Fill in the value of this attribute
+              atxChild.Value = arValue[intI + 1];
+              // Append attribute to this node
+              ndxThis.Attributes.Append(atxChild);
+              break;
+            case "child":
+              // Create this node
+              if (string.IsNullOrEmpty(strNs))
+                ndxChild = pdxDoc.CreateNode(XmlNodeType.Element, arValue[intI], null);
+              else
+                ndxChild = pdxDoc.CreateNode(XmlNodeType.Element, arValue[intI], strNs);
+              // Fill in the value of this node
+              ndxChild.InnerText = arValue[intI + 1];
+              // Append this node as child
+              ndxThis.AppendChild(ndxChild);
+              break;
+            case "text":
+              // Add the text as inner text
+              ndxThis.InnerText = arValue[intI + 1];
+              break;
+            default:
+              // There is no other option yet, so return failure
+              return null;
+          }
+        }
+        // Return the new node
+        return ndxThis;
+      } catch (Exception ex) {
+        // Warn user
+        errHandle.DoError("modXmlNode/AddXmlChild", ex);
+        // Return failure
+        return null;
+      }
+    }
+
+    // ------------------------------------------------------------------------------------
+    // Name:   AddXmlSibling
+    // Goal:   Make a new XmlNode element of type [strTag] using the [arValue] values
+    //         These values consist of:
+    //         (a) itemname
+    //         (b) itemvalue
+    //         (c) itemtype: "attribute" or "child"
+    //         Append this node as SIBLING after [ndxBrother]
+    // Return: The XmlNode element that has been made is returned
+    // History:
+    // 22-09-2010  ERK Created
+    // ------------------------------------------------------------------------------------
+    public XmlNode AddXmlSibling(XmlNode ndxBrother, string strTag, params string[] arValue) {
+      XmlNode ndxThis = null;       // Working node
+      XmlNode ndxChild = null;      // Child node
+      XmlAttribute atxChild = null; // The attribute we are looking for
+      int intI = 0;                 // Counter
+
+      try {
+        // Validate (NB: we DO allow empty parents)
+        if ((string.IsNullOrEmpty(strTag)) || (pdxDoc == null) || ndxBrother == null) return null;
+        // Make a new XmlNode in the local XML document
+        if (string.IsNullOrEmpty(strNs))
+          ndxThis = pdxDoc.CreateNode(XmlNodeType.Element, strTag, null);
+        else
+          ndxThis = pdxDoc.CreateNode(XmlNodeType.Element, strTag, strNs);
+        // Validate
+        if (ndxThis == null) return null;
+        // Append as sibling
+        XmlNode ndxParent = ndxBrother.ParentNode;
+        ndxParent.InsertAfter(ndxThis, ndxBrother);
+        // Walk through the values
+        for (intI = 0; intI <= arValue.GetUpperBound(0); intI += 3) {
+          // Action depends on the type of value
+          switch (arValue[intI + 2]) {
+            case "attribute":
               // Create attribute
               atxChild = pdxDoc.CreateAttribute(arValue[intI]);
               // Fillin value of this attribute
@@ -111,7 +188,7 @@ namespace opsub.util {
         return ndxThis;
       } catch (Exception ex) {
         // Warn user
-        errHandle.DoError("modXmlNode/AddXmlChild", ex);
+        errHandle.DoError("modXmlNode/AddXmlSibling", ex);
         // Return failure
         return null;
       }

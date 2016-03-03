@@ -156,7 +156,7 @@ namespace opsubRpc {
 
       // Check if all is valid
       if (arFiles != null) {
-        bSkip = true;
+        // bSkip = true;
         // Walk all files in this directory
         foreach (String sFile in arFiles) {
           // What we do here depends on the action identified
