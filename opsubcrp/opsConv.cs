@@ -19,6 +19,7 @@ namespace opsubcrp {
     // ========================= Declarations local to me =================================
     private ErrHandle errHandle = new ErrHandle();
     private Dictionary<String, String> dicMovie = new Dictionary<string, string>();
+    private string FOLIA_VERSION = "0.12.2";
     private bool bInit = false;
     // ======================== Getters and setters =======================================
 
@@ -410,14 +411,14 @@ namespace opsubcrp {
             sClause += lSentWrds[k].w;
             if (lSentWrds[k].bStart) {
               // Adapt the begin
-              sBegin = lSentWrds[k].s;
+              sBegin = lSentWrds[k].s.Replace(',', '.');
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "begintime", "attribute", "class", sBegin, "attribute");
               oTool.AddXmlChild(ndW, "feat", "subset", "n", "attribute", "class", lSentWrds[k].n, "attribute");
             }
             if (lSentWrds[k].bEnd) {
               // Adapt the begin
-              sEnd = lSentWrds[k].e;
+              sEnd = lSentWrds[k].e.Replace(',', '.');
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "endtime", "attribute", "class", sEnd, "attribute");
             }
@@ -565,18 +566,25 @@ namespace opsubcrp {
         switch (reader.NodeType) {
           case XmlNodeType.Element:
             writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+            bool bIsFOLIA = (reader.LocalName == "FoLiA");
             // writer.WriteStartElement(reader.LocalName);
             // Process attributes one by one
             if (reader.HasAttributes) {
               if (reader.MoveToFirstAttribute()) {
                 do {
                   if (reader.Name != "xmlns") {
-                    String[] arName = reader.Name.Split(':');
-                    if (arName.Length>1) {
-                      writer.WriteAttributeString(arName[0], arName[1], null, reader.Value);
-                      
+                    // Check for FoLiA version
+                    if (bIsFOLIA && reader.Name == "version") {
+                      // Adapt version number
+                      writer.WriteAttributeString(reader.Name, FOLIA_VERSION);
                     } else {
-                      writer.WriteAttributeString(reader.Name, reader.Value);
+                      String[] arName = reader.Name.Split(':');
+                      if (arName.Length > 1) {
+                        writer.WriteAttributeString(arName[0], arName[1], null, reader.Value);
+
+                      } else {
+                        writer.WriteAttributeString(reader.Name, reader.Value);
+                      }
                     }
                   }
                 } while (reader.MoveToNextAttribute());

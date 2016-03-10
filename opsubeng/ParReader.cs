@@ -65,5 +65,25 @@ namespace opsubeng {
         return null;
       }
     }
+    public bool getNextLinkGrp(ref XmlReader rdParallel) {
+       try {
+        // Validate
+        if (!bInit) return false;
+        // (1) Walk through the bare folia input file
+        while (!rdFileXml.EOF && rdFileXml.Read()) {
+          // (2) Check the input element
+          if (rdFileXml.IsStartElement("linkGrp")) {
+            rdParallel = rdFileXml;
+            // Return the reader
+            return true;
+          }
+        }
+        // Getting here means: we are too far
+        return false;
+      } catch (Exception ex) {
+        errHandle.DoError("getNextLinkGrp", ex); // Provide standard error message
+        return false;
+      }
+    }
   }
 }

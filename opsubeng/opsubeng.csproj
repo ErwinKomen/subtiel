@@ -45,6 +45,7 @@
     <Compile Include="conv\OpsToFolia.cs" />
     <Compile Include="conv\XmlConv.cs" />
     <Compile Include="engConv.cs" />
+    <Compile Include="FoliaXmlTextWriter.cs" />
     <Compile Include="oseMain.cs" />
     <Compile Include="ParReader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

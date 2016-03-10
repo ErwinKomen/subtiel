@@ -16,7 +16,7 @@ namespace opsub.conv {
     // ============== Local constants ==========================================
     private String strDefault = "<?xml version='1.0' encoding='utf-8'?>\n" +
       "<?xml-stylesheet type='text/xsl' href='foliaviewer.xsl'?>\n" +
-      "<FoLiA xmlns:xlink='http://www.w3.org/1999/xlink' xmlns='http://ilk.uvt.nl/folia' xml:id='@mv_name' version='0.0.1' generator='Cesax'>\n" +
+      "<FoLiA xmlns:xlink='http://www.w3.org/1999/xlink' xmlns='http://ilk.uvt.nl/folia' xml:id='@mv_name' version='0.12.2' generator='opsubeng'>\n" +
       "<metadata type='native'>\n<annotations>\n" +
       " <token-annotation annotator='www.opensubtitles.org' annotatortype='auto' />\n" +
       "</annotations>\n"+
@@ -34,7 +34,7 @@ namespace opsub.conv {
 
     private String strIntro = "<?xml version='1.0' encoding='utf-8'?>\n" +
       "<?xml-stylesheet type='text/xsl' href='foliaviewer.xsl'?>\n" +
-      "<FoLiA xmlns:xlink='http://www.w3.org/1999/xlink'  xmlns='http://ilk.uvt.nl/folia' xml:id='@mv_name' version='0.0.1' generator='Cesax'  >\n" +
+      "<FoLiA xmlns:xlink='http://www.w3.org/1999/xlink'  xmlns='http://ilk.uvt.nl/folia' xml:id='@mv_name' version='0.12.2' generator='opsubeng'  >\n" +
       " <metadata type='native'>\n"+
       " <annotations>\n" +
       "  <token-annotation annotator='www.opensubtitles.org' annotatortype='auto'></token-annotation>\n" +

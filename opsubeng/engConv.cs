@@ -77,6 +77,7 @@ namespace opsubeng {
       String sFileNL = "";        // Dutch subtitle .folia.xml file
       String sFileEn = "";        // English .folia.xml output file
       String sFileTr = "";        // A .folia.xml file that contains the translation in <complexalignments>
+      String sFileTrGz = "";      // Translation file, but zipped
       String sName = "";          // Name we are currently dealing with
 
       try {
@@ -96,13 +97,6 @@ namespace opsubeng {
           errHandle.Status("EngConv 1: cannot find Dutch " + Path.GetFileNameWithoutExtension(sFileNL));
           return true;
         }
-        /*
-        String[] arNL = Directory.GetFiles(sDirDutch, sFileNL + ".gz", SearchOption.AllDirectories);
-        // If we don't have this input, then return empty-handed
-        if (arNL.Length == 0) {
-          errHandle.Status("EngConv 1: cannot find Dutch " + Path.GetFileNameWithoutExtension(sFileNL));
-          return true;
-        }*/
 
         // (3) Find the English .folia.xml.gz file (converted FoLiA format)
         sFileEn = getDutchFolia(sSubtitleIdEN);
@@ -112,13 +106,6 @@ namespace opsubeng {
           errHandle.Status("EngConv 2: cannot find English " + Path.GetFileNameWithoutExtension(sFileEn));
           return true;
         }
-        /*
-        String[] arEN = Directory.GetFiles(sDirEnglish, sFileEn + ".gz", SearchOption.AllDirectories);
-        // If we don't have this input, then return empty-handed
-        if (arEN.Length == 0) {
-          errHandle.Status("EngConv 2: cannot find English " + Path.GetFileNameWithoutExtension(sFileEn));
-          return true;
-        } */
 
         sName = sFileEn.Replace(".folia.xml", "");
         String sNameNL = sFileNL.Replace(".folia.xml", "");
@@ -134,28 +121,25 @@ namespace opsubeng {
         String sYear = "";
         if (!getTranslation(sGzNL, lstNl, ref sYear, true)) return false;
         if (!getTranslation(sGzEN, lstEn, ref sYear, false)) return false;
-        /*
-        if (!getTranslation(arNL[0], lstNl, ref sYear, true)) return false;
-        if (!getTranslation(arEN[0], lstEn, ref sYear, false)) return false;
-        */
 
         // (6) Determine name of output folia.xml file
-        // String sYear = pdxNL.SelectSingleNode("./descendant::f:meta[@id='year']", nsNL).InnerText;
         String sDir = sDirOutput + sYear;
         if (!Directory.Exists(sDir)) Directory.CreateDirectory(sDir);
         sFileTr = sDir + "/S-OP_" + Convert.ToInt32(sSubtitleIdNL).ToString("D8") + ".folia.xml";
+        sFileTrGz = sFileTr + ".gz";
 
         // (7) Check existence - skip if needed
-        if (!bForce && File.Exists(sFileTr)) return true;
+        if (!bForce && (File.Exists(sFileTr) || File.Exists(sFileTrGz))) return true;
 
         // (7b) set the parallel at the first child node
         while (!rdLinkGrp.EOF && !rdLinkGrp.IsStartElement("link")) { rdLinkGrp.Read(); }
         // (8) Start reading the English and re-writing as translation FoLiA
-        // String sFileEng = arEN[0].Replace(".gz", "");
+        //         using (FoliaXmlWriter wrEN = new FoliaXmlWriter(sFileTr, Encoding.UTF8))
+        //         using (XmlWriter wrEN = XmlWriter.Create(sFileTr, setWr)) {
         String sFileEng = sGzEN.Replace(".gz", "");
         using (StreamReader rdFileIn = new StreamReader(sFileEng))
         using (XmlReader rdFileXml = XmlReader.Create(rdFileIn, setThis))
-        using (XmlWriter wrEN = XmlWriter.Create(sFileTr, setWr)) {
+        using (FoliaXmlWriter wrEN = new FoliaXmlWriter(sFileTr, Encoding.UTF8)) {
           // Read through the preamble of the English FoLiA and add my own annotation tag
           bool bAnnotDone = false;
           while (!rdFileXml.EOF && !bAnnotDone && rdFileXml.Read()) {
@@ -202,29 +186,13 @@ namespace opsubeng {
               String[] arDstNL = arTargets[1].Trim().Split(' ');
               // Do we have an English source?
               if (arSrcEN.Length == 0 || arSrcEN[0] == "") {
-                /* // =========== DEBUG ============
-                if (arDstNL[0] == "153") {
-                  int m = 0;
-                }
-                // ============================== */
                 // There is no English source sentence specification
                 // This means we can put the alignment anywhere
                 // Get the appropriate translation code
                 String sEnNl = "";
                 if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) return false;
-                try {
-                  wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
-                } catch (Exception ex) {
-                  int i = 1;
-                }
-                // Copy the output node
-                // oTools.WriteShallowNode(rdFileXml, wrEN);
+                wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
               } else {
-                /* // =========== DEBUG ============
-                if (arSrcEN[0] == "53") {
-                  int m = 0;
-                }
-                // ============================== */
                 // Find the English source node
                 String sIdEN = sName + ".p.1.s." + arSrcEN[arSrcEN.Length - 1];
                 bool bCorrectS = false;
@@ -248,12 +216,12 @@ namespace opsubeng {
                           // rdFileXml.ReadToNextSibling("w");
                           rdFileXml.ReadOuterXml();
                         } else if (rdFileXml.NodeType == XmlNodeType.EndElement && rdFileXml.Name == "s") {
+                          // Copy the output node
+                          oTools.WriteShallowNode(rdFileXml, wrEN);
                           // Get the appropriate translation code
                           String sEnNl = "";
                           if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) return false;
                           wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
-                          // Copy the output node
-                          oTools.WriteShallowNode(rdFileXml, wrEN);
                           // Signal this is the end of the s
                           bEndOfS = true;
                         } else {
@@ -266,6 +234,9 @@ namespace opsubeng {
                     // The <w> elements need to be skipped, so read through until the matching end-element
                     // rdFileXml.ReadToNextSibling("w");
                     rdFileXml.ReadOuterXml();
+                  } else if (rdFileXml.IsStartElement("FoLiA")) {
+                    // Correct the *version* element
+                    
                   } else {
                     // Copy the content to the xml-writer output
                     oTools.WriteShallowNode(rdFileXml, wrEN);
@@ -277,6 +248,11 @@ namespace opsubeng {
             // Try to the next <link> sibling
             bHaveLink = rdLinkGrp.ReadToNextSibling("link");
           }
+        }
+        // Zip the resulting .folia.xml file
+        if (opsub.util.General.CompressFile(sFileTr, sFileTrGz)) {
+          // If zipping was successful, then delete the file
+          File.Delete(sFileTr);
         }
 
         return true;
@@ -304,7 +280,7 @@ namespace opsubeng {
         // Add the English source references
         XmlNode ndxAlignEN = oTools.AddXmlChild(ndxCmpAlign, "alignment",
           "set", "trans", "attribute",
-          "class", "en", "attribute",
+          "class", "eng", "attribute",
           "", "", "text");
         // Do we have an English source?
         if (arSrcEN.Length > 0 && arSrcEN[0] != "") {
@@ -324,7 +300,7 @@ namespace opsubeng {
         // Add the Dutch translation references
         XmlNode ndxAlignNL = oTools.AddXmlChild(ndxCmpAlign, "alignment",
           "set", "trans", "attribute",
-          "class", "nl", "attribute",
+          "class", "nld", "attribute",
           "xlink:href", sFileNL, "attribute",
           "xlink:type", "simple", "attribute",
           "", "", "text");
@@ -522,7 +498,7 @@ namespace opsubeng {
             // Add the Dutch translation references
             XmlNode ndxAlignNL = oTools.AddXmlChild(ndxCmpAlign, "alignment",
               "set", "trans", "attribute",
-              "class", "nl", "attribute",
+              "class", "nld", "attribute",
               "xlink:href", sFileNL, "attribute",
               "xlink:type", "simple", "attribute");
             // Do we have a Dutch translation?
@@ -805,5 +781,6 @@ namespace opsubeng {
     }
  
   }
+  
 
 }

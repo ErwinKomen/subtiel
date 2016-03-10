@@ -19,6 +19,7 @@ namespace opsub.util {
     private string strNs = "";          // Possible namespace URI
     private ErrHandle errHandle;        // Our own copy of the error handle
     private string strSpace = " ,.<>?/;:\\|[{]}=+-_)(*&^%$#@!~`" + "\"" + "\t\n\r";
+    private string FOLIA_VERSION = "0.12.2";
     // =========================================================================================================
     public xmlTools(ErrHandle objErr) {
       this.errHandle = objErr;
@@ -578,6 +579,106 @@ namespace opsub.util {
         // Warn the user
         errHandle.DoError("xmlTools/ByteArrayToString", ex);
         return "";
+      }
+    }
+
+    /* -------------------------------------------------------------------------------------
+        * Name:  WriteShallowNode
+        * Goal:  Copy piece-by-piece
+        * History:
+        * 2/oct/2015 ERK Created
+          ------------------------------------------------------------------------------------- */
+    public void WriteShallowNode(XmlReader reader, XmlWriter writer) {
+      if (reader == null) {
+        throw new ArgumentNullException("reader");
+      }
+      if (writer == null) {
+        throw new ArgumentNullException("writer");
+      }
+      try {
+        switch (reader.NodeType) {
+          case XmlNodeType.Element:
+            writer.WriteStartElement(reader.Prefix, reader.LocalName, reader.NamespaceURI);
+            bool bIsFOLIA = (reader.LocalName == "FoLiA");
+            string sLocalName = reader.LocalName;
+            // Process attributes one by one
+            if (reader.HasAttributes) {
+              if (reader.MoveToFirstAttribute()) {
+                do {
+                  if (reader.Name != "xmlns") {
+                    bool bWritten = false;
+                    // Action depends on local name
+                    switch (sLocalName) {
+                      case "FoLiA":
+                        // Is the the attribute @version?
+                        if (reader.Name == "version") { writer.WriteAttributeString(reader.Name, FOLIA_VERSION); bWritten = true; }
+                        break;
+                      case "t":
+                        // is this the attribute @class?
+                        if (reader.Name == "class") { writer.WriteAttributeString(reader.Name, "eng"); bWritten = true; }
+                        break;
+                    }
+                    if (!bWritten) {
+                      String[] arName = reader.Name.Split(':');
+                      if (arName.Length > 1) {
+                        writer.WriteAttributeString(arName[0], arName[1], null, reader.Value);
+
+                      } else {
+                        writer.WriteAttributeString(reader.Name, reader.Value);
+                      }
+                    }
+                    /*
+                    // Check for FoLiA version
+                    if (bIsFOLIA && reader.Name == "version") {
+                      // Adapt version number
+                      writer.WriteAttributeString(reader.Name, FOLIA_VERSION);
+                    } else {
+                      String[] arName = reader.Name.Split(':');
+                      if (arName.Length > 1) {
+                        writer.WriteAttributeString(arName[0], arName[1], null, reader.Value);
+
+                      } else {
+                        writer.WriteAttributeString(reader.Name, reader.Value);
+                      }
+                    } */
+                  }
+                } while (reader.MoveToNextAttribute());
+              }
+            }
+
+            if (reader.IsEmptyElement) {
+              writer.WriteEndElement();
+            }
+            break;
+          case XmlNodeType.Text:
+            writer.WriteString(reader.Value);
+            break;
+          case XmlNodeType.Whitespace:
+          case XmlNodeType.SignificantWhitespace:
+            writer.WriteWhitespace(reader.Value);
+            break;
+          case XmlNodeType.CDATA:
+            writer.WriteCData(reader.Value);
+            break;
+          case XmlNodeType.EntityReference:
+            writer.WriteEntityRef(reader.Name);
+            break;
+          case XmlNodeType.XmlDeclaration:
+          case XmlNodeType.ProcessingInstruction:
+            writer.WriteProcessingInstruction(reader.Name, reader.Value);
+            break;
+          case XmlNodeType.DocumentType:
+            writer.WriteDocType(reader.Name, reader.GetAttribute("PUBLIC"), reader.GetAttribute("SYSTEM"), reader.Value);
+            break;
+          case XmlNodeType.Comment:
+            writer.WriteComment(reader.Value);
+            break;
+          case XmlNodeType.EndElement:
+            writer.WriteFullEndElement();
+            break;
+        }
+      } catch (Exception ex) {
+        errHandle.DoError("WriteShallowNode", ex); // Provide standard error message
       }
     }
 

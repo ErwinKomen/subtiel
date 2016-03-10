@@ -566,31 +566,6 @@ namespace opsubRpc {
                 ndxSubtitle.RemoveChild(ndxTmp);
               }
             }
-            /*
-            // Convert this list to an array
-            String[] arNumLng = sSubLangs.Split(' ');
-            // Make sure we have an "AvailableList"
-            XmlNode ndxAvailableList = ndxSubtitle.SelectSingleNode("./child::f:AvailableList", nsFolia);
-            if (ndxAvailableList == null) ndxAvailableList = oTools.AddXmlChild(ndxSubtitle, "AvailableList");
-            // Add the list of languages in which subtitles are available
-            for (int j=0;j<arNumLng.Length;j+=2) {
-              // Get the information
-              int iNum = Convert.ToInt32(arNumLng[j]);
-              String sLng = arNumLng[j + 1];
-              // Check if this item is already here
-              XmlNode ndxAvail = ndxAvailableList.SelectSingleNode(
-                "./child::f:Available[@Number="+Convert.ToString(iNum) +
-                " and @Source='"+this.sDicSource+ "' and text() = '" + sLng + "']", nsFolia);
-              if (ndxAvail== null) {
-                // Add it
-                oTools.AddXmlChild(ndxAvailableList, "Available",
-                  "Number", Convert.ToString(iNum), "attribute",
-                  "Source", sDicSource, "attribute", 
-                  "", sLng, "text");
-              }
-            } */
-            // Adapt the language-available string slightly 
-            // NO -- leave as is: sSubLangs = "[" + sSubLangs + "]";
 
             // Process the languages available list:
             XmlNode ndxLngAvail = ndxSubtitle.SelectSingleNode("./child::f:languageAvailable", nsFolia);
@@ -639,6 +614,7 @@ namespace opsubRpc {
             }
             // Try to find out more information, depending on the status we have found
             switch (oOrg.license) {
+              case "copy":
               case "largest":
               case "unique":
                 bool bCopyright = false;
