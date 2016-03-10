@@ -68,6 +68,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="conv\XmlConv.cs" />
+    <Compile Include="FoliaXmlTextWriter.cs" />
     <Compile Include="omdb\MovieInfo.cs" />
     <Compile Include="omdb\omdbapi.cs" />
     <Compile Include="oprConv.cs" />

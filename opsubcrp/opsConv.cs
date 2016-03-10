@@ -7,6 +7,7 @@ using System.IO;
 using System.Threading.Tasks;
 using opsubcrp.conv;
 using System.Text.RegularExpressions;
+using opsub;
 
 namespace opsubcrp {
   /* -------------------------------------------------------------------------------------
@@ -194,8 +195,10 @@ namespace opsubcrp {
         using (XmlReader rdFolia = XmlReader.Create(rdFileTmpF))
 
         // (5) Create an output file 
-        using (StreamWriter wrFileTmpOut = new StreamWriter(sFileOut))
-        using (wrFolia = XmlWriter.Create(wrFileTmpOut, wrSet)) {
+        // using (StreamWriter wrFileTmpOut = new StreamWriter(sFileOut))
+        //  using (wrFolia = XmlWriter.Create(wrFileTmpOut, wrSet)) {
+        using (wrFolia = new FoliaXmlWriter(sFileOut, Encoding.UTF8)) {
+  
 
           // (6) Walk through the bare folia input file
           while (!rdFolia.EOF && rdFolia.Read()) {

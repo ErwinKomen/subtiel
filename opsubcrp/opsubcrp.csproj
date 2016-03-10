@@ -44,6 +44,7 @@
   <ItemGroup>
     <Compile Include="conv\OpsToFolia.cs" />
     <Compile Include="conv\XmlConv.cs" />
+    <Compile Include="FoliaXmlTextWriter.cs" />
     <Compile Include="opsConv.cs" />
     <Compile Include="oscMain.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
