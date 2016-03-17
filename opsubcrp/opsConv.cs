@@ -171,6 +171,7 @@ namespace opsubcrp {
 
         // (2) Make sure we have a 'global' start and finish time
         String sTimeStart = ""; String sTimeEnd = "";
+        String sTimeBkup = "";  // Backup time for when we get confused
         String sLineSrt = "";   // Line number within the SRT file
         bool bStart = false;    // This word has the time-start marker
         bool bEnd = false;      // This word has the time-end marker
@@ -267,6 +268,7 @@ namespace opsubcrp {
                           if (sTimeId.EndsWith("S")) {
                             // Keep track of the latest *start* time and reset the end time
                             sTimeStart = sTimeVal; sTimeEnd = ""; bStart = true;
+                            sTimeBkup = sTimeVal;
                             // Get the SRT line number
                             sLineSrt = sTimeId.Substring(1, sTimeId.Length - 2);
                           } else {
@@ -284,7 +286,7 @@ namespace opsubcrp {
                             // Process the sentence buffer
                             // (a) Process all previous sentences
                             int iCount = lSentBuf.Count;
-                            if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd)) {
+                            if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, iCount - 1, sTimeEnd, sTimeBkup)) {
                               return false;
                             }
                             // (b) Process the words in the current sentence
@@ -327,7 +329,7 @@ namespace opsubcrp {
                   }
                 }   // End while
                 // Process any remaining sentences
-                if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd)) {
+                if (!FlushOpsToFolia(ref lSentBuf, ref wrFolia, lSentBuf.Count, sTimeEnd, sTimeBkup)) {
                   return false;
                 }
                 rdOps.Close();    // rdOps.Dispose();
@@ -377,8 +379,9 @@ namespace opsubcrp {
     /// <param name="wrFolia"></param>
     /// <param name="iCount"></param>
     /// <param name="sTimeEnd"></param>
+    /// <param name="sTimeBkup"></param>
     /// <returns></returns>
-    private bool FlushOpsToFolia(ref List<Sent> lSentBuf, ref XmlWriter wrFolia, int iCount, String sTimeEnd) {
+    private bool FlushOpsToFolia(ref List<Sent> lSentBuf, ref XmlWriter wrFolia, int iCount, String sTimeEnd, String sTimeBkup) {
       try {
         // Validate
         if (iCount == 0) return true;
@@ -415,6 +418,8 @@ namespace opsubcrp {
             if (lSentWrds[k].bStart) {
               // Adapt the begin
               sBegin = lSentWrds[k].s.Replace(',', '.');
+              // Prevent empty-time-errors
+              if (sBegin == "") sBegin = sTimeBkup.Replace(",", ".");
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "begintime", "attribute", "class", sBegin, "attribute");
               oTool.AddXmlChild(ndW, "feat", "subset", "n", "attribute", "class", lSentWrds[k].n, "attribute");
@@ -422,6 +427,8 @@ namespace opsubcrp {
             if (lSentWrds[k].bEnd) {
               // Adapt the begin
               sEnd = lSentWrds[k].e.Replace(',', '.');
+              // Prevent empty-time-errors
+              if (sEnd == "") sEnd = sTimeBkup.Replace(",", ".");
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "endtime", "attribute", "class", sEnd, "attribute");
             }
@@ -434,6 +441,9 @@ namespace opsubcrp {
           */
           // Add the @begintime and @endtime values for this sentence
           sBegin = lSentWrds[0].s.Replace(',', '.');
+          // Prevent empty-time-errors
+          if (sBegin == "") sBegin = sTimeBkup.Replace(",", ".");
+          // Get the end-time
           sEnd = lSentWrds[lSentWrds.Count - 1].e.Replace(',', '.');
           if (sEnd == "") sEnd = sBegin;
           ndS.Attributes["begintime"].Value = sBegin;

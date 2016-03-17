@@ -341,7 +341,7 @@ namespace opsubRpc {
             // Add a statistics element
             oTools.AddXmlChild(ndxSubtitle, "Statistics",
               "nWords", Convert.ToString(iWords), "child",
-              "nSents", Convert.ToString(iSents), "child");
+              "nSentences", Convert.ToString(iSents), "child");
           }
           // Add stat info
           XmlNode ndxInfo = ndxSubtitle.SelectSingleNode("./child::f:StatusInfo", nsFolia);
@@ -419,6 +419,7 @@ namespace opsubRpc {
         // Get correct namespace manager
         XmlNamespaceManager nsFolia = new XmlNamespaceManager(pdxCmdi.NameTable);
         nsFolia.AddNamespace("f", pdxCmdi.DocumentElement.NamespaceURI);
+        oTools.SetXmlDocument(pdxCmdi, pdxCmdi.DocumentElement.NamespaceURI);
         // Zoek het <Subtitle> element 
         XmlNode ndxSubtitle = pdxCmdi.SelectSingleNode("./descendant::f:Subtitle", nsFolia);
         if (ndxSubtitle != null) {
@@ -427,7 +428,18 @@ namespace opsubRpc {
           // Kijk of er al een <textHash> element is
           XmlNode ndxTextHash = ndxSubtitle.SelectSingleNode("./child::f:textHash", nsFolia);
           XmlNode ndxWords = ndxSubtitle.SelectSingleNode("./descendant::f:nWords", nsFolia);
-          XmlNode ndxSents = ndxSubtitle.SelectSingleNode("./descendant::f:nSents", nsFolia);
+          XmlNode ndxSents = ndxSubtitle.SelectSingleNode("./descendant::f:nSentences", nsFolia);
+          if (ndxSents == null) {
+            ndxSents = ndxSubtitle.SelectSingleNode("./descendant::f:nSents", nsFolia);
+            // Does this one exist?
+            if (ndxSents != null) {
+              // Then change the name to what it should be
+              XmlNode ndxNew = oTools.AddXmlChild(ndxSents.ParentNode, "nSentences", "", ndxSents.InnerText, "text");
+              // Remove the old one
+              ndxNew.ParentNode.RemoveChild(ndxSents);
+              ndxSents = ndxNew;
+            }
+          }
           XmlNode ndxIdMovie = pdxCmdi.SelectSingleNode("./descendant::f:MovieId", nsFolia);
           XmlNode ndxImdb = pdxCmdi.SelectSingleNode("./descendant::f:ImdbId", nsFolia);
           if (ndxTextHash != null && ndxWords != null && ndxSents != null) {
@@ -439,6 +451,10 @@ namespace opsubRpc {
             
             // Also add it to another list
             lSubInst.Add(new SubInstance(sFileCmdi, Convert.ToUInt64(sHash), iWords, iSents, sIdMovie, sImdbId));
+          } else {
+            // This is not really an error, but we should give a warning
+            errHandle.Status("HarvestHashFromCmdi: skipping no-hash-having [" + sFileCmdi + "]");
+            return true;
           }
         }
 
@@ -473,8 +489,10 @@ namespace opsubRpc {
               if (iHdist <= iGoodHd) {
                 // So this is probably a duplicate of me -- add it
                 lSubInst[i].addDuplicate(j);
-                // DO NOT add me to the list of the other one
+                // DO NOT add me to the list of the other one --> EXTINCT
                 // lSubInst[j].addDuplicate(i);
+                // DO add me to the list of the other one (otherwise order of occurrance plays a role)
+                lSubInst[j].addDuplicate(i);
               }
             }
           }
@@ -487,9 +505,6 @@ namespace opsubRpc {
           // Get this instance
           SubInstance oOrg = lSubInst[i];
 
-          // int iPtc = (100 * (i + 1)) / lSubInst.Count;
-          // errHandle.Status("Considering:\t"+iPtc+"%\t" + oOrg.name);
-
           // Initialisations
           String sLink = "";
           List<String> lSimilar = new List<string>();
@@ -501,6 +516,7 @@ namespace opsubRpc {
             int iWords = oOrg.words;
             int iSents = oOrg.sents;
             int iLongest = -1;
+            bool bEqual = true;    // Assume copies are NOT equal...
             for (int j=0;j<oOrg.lDup.Count;j++) {
               SubInstance oThis = lSubInst[oOrg.lDup[j]];
               if (oThis.words> iWords && oThis.sents >= iSents) {
@@ -509,12 +525,21 @@ namespace opsubRpc {
                 iSents = oThis.sents;
                 iLongest = j;
               }
+              // Check for inequality
+              if (oThis.words != iWords || oThis.sents != iSents) bEqual = false;
             }
             // Check what the longest is; that's the most 'original'
             if (iLongest<0) {
-              // The [oOrg] is the longest
-              oOrg.license = "largest";
-              sLink = "this";
+              // Are they equal?
+              if (bEqual) {
+                // The [oOrg] is the longest
+                oOrg.license = "equal";
+                sLink = "list";
+              } else {
+                // The [oOrg] is the longest
+                oOrg.license = "largest";
+                sLink = "this";
+              }
               // Create a list of similar ones
               for (int j = 0; j < oOrg.lDup.Count; j++) {
                 // aSimilar.Add(lSubInst[oOrg.lDup[j]].name);
@@ -616,6 +641,7 @@ namespace opsubRpc {
             switch (oOrg.license) {
               case "copy":
               case "largest":
+              case "equal":
               case "unique":
                 bool bCopyright = false;
                 bool bTranslated = false;
@@ -750,27 +776,21 @@ namespace opsubRpc {
           // Save the adapted CMDI
           pdxCmdi.Save(sFileCmdi);
 
-          // Do we need to copy the CMDI and the FOLIA?
-          if (oOrg.license != "copy") {
-            // Create the target directory if it does not exist yet
-            if (!Directory.Exists(sTargetDir)) {
-              Directory.CreateDirectory(sTargetDir);
-            }
-            // Get the file name
-            String sName = Path.GetFileNameWithoutExtension(sFileCmdi).Replace(".cmdi", "");
-            String sSrc = Path.GetDirectoryName(sFileCmdi);
-            if (!sSrc.EndsWith("/") && !sSrc.EndsWith("\\")) sSrc += "/";
-            // Copy the CMDI
-            File.Copy(sFileCmdi, sTargetDir + sName + ".cmdi.xml",true);
-            // Copy the folia
-            sName = sName + ".folia.xml.gz";
-            File.Copy(sSrc+sName, sTargetDir + sName, true);
-            // Show where we are
-            errHandle.Status("copying:\t" + oOrg.name + "\t" + oOrg.license + "\t" + sLink + "\t" + sTargetDir);
-          } else {
-            // Show where we are
-            errHandle.Status("findDuplicates:\t[" + oOrg.name + "]\t[" + oOrg.license + "/" + sLink + "]");
+          // Create the target directory if it does not exist yet
+          if (!Directory.Exists(sTargetDir)) {
+            Directory.CreateDirectory(sTargetDir);
           }
+          // Get the file name
+          String sName = Path.GetFileNameWithoutExtension(sFileCmdi).Replace(".cmdi", "");
+          String sSrc = Path.GetDirectoryName(sFileCmdi);
+          if (!sSrc.EndsWith("/") && !sSrc.EndsWith("\\")) sSrc += "/";
+          // Copy the CMDI
+          File.Copy(sFileCmdi, sTargetDir + sName + ".cmdi.xml", true);
+          // Copy the folia
+          sName = sName + ".folia.xml.gz";
+          File.Copy(sSrc + sName, sTargetDir + sName, true);
+          // Show where we are
+          errHandle.Status("copying:\t" + oOrg.name + "\t" + oOrg.license + "\t" + sLink + "\t" + sTargetDir);
 
         }
 

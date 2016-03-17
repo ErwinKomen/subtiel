@@ -82,12 +82,18 @@ namespace opsubeng {
 
       try {
         // Validate
-        if (rdLinkGrp == null) return false;
+        if (rdLinkGrp == null) { errHandle.DoError("ConvertOneEngToFolia", "No linkGrp"); return false; }
         if (!Directory.Exists(sDirOutput)) { errHandle.DoError("ConvertOneEngToFolia", "No output directory"); return false; }
 
         // (1) Get the open subtitle id's
         sSubtitleIdNL = getMovieId(rdLinkGrp.GetAttribute("toDoc"));
         sSubtitleIdEN = getMovieId(rdLinkGrp.GetAttribute("fromDoc"));
+        errHandle.Status("EngConv [" + sSubtitleIdEN + "/" + sSubtitleIdNL + "]");
+        // ====================== DEBUG ==============
+        if (sSubtitleIdNL == "23233") {
+          int i = 0;
+        }
+        // ===========================================
 
         // (2) Find the Dutch .folia.xml.gz file (converted FoLiA format)
         sFileNL = getDutchFolia(sSubtitleIdNL);
@@ -119,8 +125,8 @@ namespace opsubeng {
 
         // (5) Read the Dutch and the English folia.xml files (unpack + read)
         String sYear = "";
-        if (!getTranslation(sGzNL, lstNl, ref sYear, true)) return false;
-        if (!getTranslation(sGzEN, lstEn, ref sYear, false)) return false;
+        if (!getTranslation(sGzNL, lstNl, ref sYear, true)) {errHandle.DoError("ConvertOneEngToFolia", "getTranslation NL problem"); return false;}
+        if (!getTranslation(sGzEN, lstEn, ref sYear, false)) { errHandle.DoError("ConvertOneEngToFolia", "getTranslation EN problem"); return false; }
 
         // (6) Determine name of output folia.xml file
         String sDir = sDirOutput + sYear;
@@ -142,7 +148,8 @@ namespace opsubeng {
         using (FoliaXmlWriter wrEN = new FoliaXmlWriter(sFileTr, Encoding.UTF8)) {
           // Read through the preamble of the English FoLiA and add my own annotation tag
           bool bAnnotDone = false;
-          while (!rdFileXml.EOF && !bAnnotDone && rdFileXml.Read()) {
+          bool bMetaDone = false;
+          while (!rdFileXml.EOF && (!bAnnotDone || !bMetaDone) && rdFileXml.Read()) {
             if (rdFileXml.IsStartElement("annotations")) {
               // Copy the <annotations> starting node content
               oTools.WriteShallowNode(rdFileXml, wrEN);
@@ -168,16 +175,35 @@ namespace opsubeng {
                 }
               }
             } else {
+              // Test for metadata end
+              if (rdFileXml.NodeType == XmlNodeType.EndElement && rdFileXml.Name == "metadata") bMetaDone = true;
               // Copy the content to the xml-writer output
               oTools.WriteShallowNode(rdFileXml, wrEN);
             }
           }
+          // Double check: has annotation been processed
+          if (!bAnnotDone || !bMetaDone) {
+            errHandle.Status("ConvertOneEngToFolia problem: annotation has not been processed correctly: "+bAnnotDone+" "+bMetaDone);
+            return false;
+          }
+          // Read and write until having finished reading the first <p> element
+          bool bPstarted = false; 
+          while (!rdFileXml.EOF && !bPstarted && rdFileXml.Read()) {
+            if (rdFileXml.IsStartElement("p")) bPstarted = true;
+            // Copy the content to the xml-writer output
+            oTools.WriteShallowNode(rdFileXml, wrEN);
+          }
           //
           bool bHaveLink = rdLinkGrp.IsStartElement("link");
+          bool bPfinish = false;
           // Loop through all <link> children of <linkGrp>
-          while (!rdLinkGrp.EOF && bHaveLink) {
+          while (!rdLinkGrp.EOF && bHaveLink && !rdFileXml.EOF) {
             // Read the parameters for this English-Dutch match
             String sXtargets = rdLinkGrp.GetAttribute("xtargets");
+            // Be prepared: skip until the next start element (if there is any!!)
+            while (!rdLinkGrp.EOF && rdLinkGrp.Read() && rdLinkGrp.NodeType != XmlNodeType.Element);
+            // Set a flag to signal that the next one will be LINK
+            bHaveLink = (!rdLinkGrp.EOF && rdLinkGrp.NodeType == XmlNodeType.Element && rdLinkGrp.Name == "link");
             // errHandle.Status("Processing: [" + sXtargets + "]");
             String[] arTargets = sXtargets.Split(';');
             if (arTargets.Length ==2) {
@@ -190,12 +216,20 @@ namespace opsubeng {
                 // This means we can put the alignment anywhere
                 // Get the appropriate translation code
                 String sEnNl = "";
-                if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) return false;
-                wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
+                if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) {
+                  errHandle.DoError("engConv/ConvertOneEngToFolia 0x0010", "No translation code");
+                  return false;
+                }
+                try {
+                  wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
+                } catch (Exception ex) {
+                  errHandle.DoError("engConv/ConvertOneEngToFolia 0x0011", ex);
+                  return false;
+                }
               } else {
                 // Find the English source node
                 String sIdEN = sName + ".p.1.s." + arSrcEN[arSrcEN.Length - 1];
-                bool bCorrectS = false;
+                bool bCorrectS = false; 
                 // Read the English source until we reach this <s> node
                 while (!rdFileXml.EOF && !bCorrectS && rdFileXml.Read()) {
                   // (2) Check the input element
@@ -204,49 +238,81 @@ namespace opsubeng {
                     oTools.WriteShallowNode(rdFileXml, wrEN);
                     // Check the ID of this element
                     String sId = rdFileXml.GetAttribute("xml:id");
-                    // Check if this is the correct node
-                    if (sId == sIdEN) {
+                    // Check if this is the correct node and if we are able to PLACE it at this point
+                    if (sId == sIdEN ) {
                       bCorrectS = true;   // Found the correct node
-                      // Read <s> content until having processed the end-element
-                      bool bEndOfS = false;
-                      while (!rdFileXml.EOF && !bEndOfS && rdFileXml.Read()) {
-                        // Make sure we skip the <w> elements
-                        if (rdFileXml.IsStartElement("w")) {
-                          // The <w> elements need to be skipped, so read through until the matching end-element
-                          // rdFileXml.ReadToNextSibling("w");
-                          rdFileXml.ReadOuterXml();
-                        } else if (rdFileXml.NodeType == XmlNodeType.EndElement && rdFileXml.Name == "s") {
-                          // Copy the output node
-                          oTools.WriteShallowNode(rdFileXml, wrEN);
-                          // Get the appropriate translation code
-                          String sEnNl = "";
-                          if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) return false;
-                          wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
-                          // Signal this is the end of the s
-                          bEndOfS = true;
-                        } else {
-                          // Copy input to output
-                          oTools.WriteShallowNode(rdFileXml, wrEN);
+                      // Can we place it here?
+                      if (bPfinish) {
+                        // Unable to place the node here
+                        errHandle.Status("Unable to output English id=" + sIdEN);
+                      } else {
+                        // Read <s> content until having processed the end-element
+                        bool bEndOfS = false;
+                        while (!rdFileXml.EOF && !bEndOfS && rdFileXml.Read()) {
+                          // Make sure we skip the <w> elements
+                          if (rdFileXml.IsStartElement("w")) {
+                            // The <w> elements need to be skipped, so read through until the matching end-element
+                            // rdFileXml.ReadToNextSibling("w");
+                            rdFileXml.ReadOuterXml();
+                          } else if (rdFileXml.NodeType == XmlNodeType.EndElement && rdFileXml.Name == "s") {
+                            // Copy the output node
+                            oTools.WriteShallowNode(rdFileXml, wrEN);
+                            // Get the appropriate translation code
+                            String sEnNl = "";
+                            if (!getTranslationCode(arSrcEN, arDstNL, sName, sNameNL, sFileNL, ref sEnNl)) {
+                              errHandle.DoError("ConvertOneEngToFolia", "getTranslation EN problem"); return false;
+                            }
+                            try {
+                              wrEN.WriteNode(XmlReader.Create(new StringReader(sEnNl), setThis), true);
+                            } catch (Exception ex) {
+                              errHandle.DoError("engConv/ConvertOneEngToFolia 0x0012", ex);
+                              return false;
+                            }
+                            // Signal this is the end of the s
+                            bEndOfS = true;
+                          } else {
+                            // Copy input to output
+                            oTools.WriteShallowNode(rdFileXml, wrEN);
+                          }
                         }
                       }
+
+                      int iStop = 1;
                     }
                   } else if (rdFileXml.IsStartElement("w")) {
                     // The <w> elements need to be skipped, so read through until the matching end-element
-                    // rdFileXml.ReadToNextSibling("w");
                     rdFileXml.ReadOuterXml();
-                  } else if (rdFileXml.IsStartElement("FoLiA")) {
-                    // Correct the *version* element
-                    
+                  } else if (rdFileXml.NodeType == XmlNodeType.EndElement && rdFileXml.Name == "p") {
+                    // This is an ending </p>
+                    // (1) Is a <link> still following?
+                    if (bHaveLink) {
+                      // Process links until we are through...
+                      int iE = 3;
+                    }
+                    // (1) write it out
+                    oTools.WriteShallowNode(rdFileXml, wrEN);
+                    // (2) Warn the while-loop that this is a finishing </p> element
+                    bPfinish = true;
                   } else {
+                    // If there is another opening <p> we can reset the <p> finish
+                    if (rdFileXml.IsStartElement("p")) bPfinish = false;
                     // Copy the content to the xml-writer output
                     oTools.WriteShallowNode(rdFileXml, wrEN);
                   }
                 }
+                // Check if </p> has been found
+                if (bPfinish) {
+
+                }
+                // Check whether we found the correct S or not
+                if (!bCorrectS) {
+                  // Did not find the correct S -- skip through
+                  int iMissed = 1;
+                  errHandle.Status("Missing node "+ sIdEN);
+                }
               }
             }
-
-            // Try to the next <link> sibling
-            bHaveLink = rdLinkGrp.ReadToNextSibling("link");
+            // The next <link> is retrieved at the start of this loop
           }
         }
         // Zip the resulting .folia.xml file
@@ -292,7 +358,8 @@ namespace opsubeng {
             String sTextEN = getSubTransText(sIdEN, this.lstEn);
             // Add the <aref> element
             oTools.AddXmlChild(ndxAlignEN, "aref",
-              "id", sName + ".p.1.s." + arSrcEN[i], "attribute",
+              // "id", sName + ".p.1.s." + arSrcEN[i], "attribute",
+              "id", sIdEN, "attribute",
               "t", sTextEN, "attribute",
               "type", "s", "attribute");
           }
@@ -314,7 +381,8 @@ namespace opsubeng {
             String sTextNL = getSubTransText(sIdNL, this.lstNl);
             // Add the <aref> element
             oTools.AddXmlChild(ndxAlignNL, "aref",
-              "id", sName + ".p.1.s." + arDstNL[i], "attribute",
+              "id", sIdNL, "attribute",
+              // "id", sNameNL + ".p.1.s." + arDstNL[i], "attribute",
               "t", sTextNL, "attribute",
               "type", "s", "attribute");
           }
@@ -691,6 +759,14 @@ namespace opsubeng {
       try {
         // Start by taking the last part of the path
         sBack = Path.GetFileName(sPath);
+
+        /* // =============== DEBUG ===
+        if (sBack.Contains("23233") || sPath.Contains("/1939/")) {
+          int i = 2;
+        }
+        errHandle.Status("getMovieId: " + sPath);
+        // ========================= */
+
         // Find the underscore
         int iUnd = sBack.IndexOf("_");
         if (iUnd > 0) {
@@ -751,8 +827,11 @@ namespace opsubeng {
         // Are we initialized?
         if (this.lstEnGZ == null) {
           // Read the files
+          errHandle.Status("Reading list of English .xml.gz files...");
           this.lstEnGZ = Directory.GetFiles(sDirEnglish, "*.xml.gz", SearchOption.AllDirectories).ToList<String>();
+          errHandle.Status("Reading list of Dutch .xml.gz files...");
           this.lstNlGZ = Directory.GetFiles(sDirDutch, "*.xml.gz", SearchOption.AllDirectories).ToList<String>();
+          errHandle.Status("Continuing...");
         }
         // Set the correct list to look in
         if (sLng == "en")

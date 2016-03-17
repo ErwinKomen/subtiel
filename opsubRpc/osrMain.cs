@@ -35,8 +35,9 @@ namespace opsubRpc {
         // Check command-line options
         for (int i = 0; i < args.Length; i++) {
           // get this argument
-          String sArg = args[i];
+          String sArg = args[i].Trim();
           if (sArg.StartsWith("-")) {
+            errHandle.Status("Processing argument ["+sArg+"]");
             // Check out the arguments
             switch (sArg.Substring(1)) {
               case "i": // Input file or directory with .folia.xml files
@@ -67,6 +68,8 @@ namespace opsubRpc {
                 sLanguage = args[++i];
                 break;
             }
+          } else if (sArg == "" || sArg == "\r") {
+            // Do nothing
           } else {
             // Throw syntax error and leave
             SyntaxError("1 - i=" + i + " args=" + args.Length + " argCurrent=[" + sArg + "]"); return;
@@ -204,7 +207,8 @@ namespace opsubRpc {
        ------------------------------------------------------------------------------------- */
     static void SyntaxError(String sChk) {
       Console.WriteLine("Syntax: opsubRpc -i inputDir -o outputDir [-d] \n" +
-        "\n\n\tNote: output directory must differ from input one\n");
+        "\n\n\tNote: output directory must differ from input one\n"+
+        "\nCheck: " + sChk);
     }
 
 

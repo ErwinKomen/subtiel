@@ -21,9 +21,11 @@ namespace opsubcombi {
     private String sDirOut = "";                        // Output base directory
     private String sDirFinal = "";                      // Subdirectory for *final* results
     private String sDirCopy = "";                       // Subdirectory for *copy* results
+    private String sDirEqual = "";                      // Subdirectory for *equal* results
     private String sDirNotUsed = "";                    // Subdirectory for *notused* results
     private String sDirOther = "";                      // Subdirectory for any *other* results
     private String sCsvFile = "";                       // Full name of file that contains CSV information for each result
+    private bool bInit = false;                         // Initialisation flag
     // ================================ CLASS INITIALISATION ======================================
     public cmbConv(ErrHandle oErr) {
       this.errHandle = oErr;
@@ -42,14 +44,18 @@ namespace opsubcombi {
         if (!Directory.Exists(sDirOut)) Directory.CreateDirectory(sDirOut);
         this.sDirFinal = Path.GetFullPath(sDirOut + "/final");
         this.sDirCopy = Path.GetFullPath(sDirOut + "/copy");
+        this.sDirEqual = Path.GetFullPath(sDirOut + "/equal");
         this.sDirNotUsed = Path.GetFullPath(sDirOut + "/notused");
         this.sDirOther = Path.GetFullPath(sDirOut + "/other");
         if (!Directory.Exists(sDirFinal)) Directory.CreateDirectory(sDirFinal);
         if (!Directory.Exists(sDirCopy)) Directory.CreateDirectory(sDirCopy);
+        if (!Directory.Exists(sDirEqual)) Directory.CreateDirectory(sDirEqual);
         if (!Directory.Exists(sDirNotUsed)) Directory.CreateDirectory(sDirNotUsed);
         if (!Directory.Exists(sDirOther)) Directory.CreateDirectory(sDirOther);
         this.sCsvFile = Path.GetFullPath(sDirOut + "/info.csv");
         if (File.Exists(sCsvFile)) File.Delete(sCsvFile);
+        // Set init flag
+        bInit = true;
       }
     }
 
@@ -67,8 +73,8 @@ namespace opsubcombi {
       String sTarget = "";  // Target file name
 
       try {
-        // Check existence of output directories
-        if (!Directory.Exists(sDirOut + "/final")) Directory.CreateDirectory(sDirOut + "/final");
+        // Validate
+        if (!bInit) { errHandle.DoError("cmdConv/harvestOneFolia", "The [output] has not been set"); return false; }
         // Create a Harvest-log-item
         Harvest oLog = new Harvest(sFileFolia);
         // Look for the corresponsing .cmdi.xml file
@@ -96,8 +102,9 @@ namespace opsubcombi {
           oLog.stLanguage = getFieldValue("Subtitle", "languageCode", "");
           oLog.stLicType = getFieldValue("License", "LicenseType", "");
           oLog.stLink = getFieldValue("Subtitle", "StatusInfo", "link");
-          oLog.stLng = getFieldValue("Subtitle", "languageCode", "");
-          oLog.stSentences = getFieldValue("Subtitle", "nSents", "");
+          oLog.stLng = getFieldValue("Subtitle", "languageAvailable", "");
+          oLog.stSentences = getFieldValue("Subtitle", "nSentences", "");
+          if (oLog.stSentences == "") oLog.stSentences = getFieldValue("Subtitle", "nSents", "");
           oLog.stStatus = getFieldValue("Subtitle", "StatusInfo", "status");
           oLog.stUserClass = getFieldValue("Author", "UserClass", "");
           oLog.stUserId = getFieldValue("Author", "UserID", "");
@@ -106,27 +113,21 @@ namespace opsubcombi {
 
           String sYear = (oLog.movieYear == "") ? "" : "/" + oLog.movieYear;
 
+          // Logging of status
+          errHandle.Status("harvestOneFolia [" + sFileCmdi + "] status=[" + oLog.stStatus + "]");
+
           // Action depends on the status we have
-          switch (oLog.stStatus) {
-            case "copy":
-              // Check directory
-              if (!Directory.Exists(sDirCopy + sYear)) { Directory.CreateDirectory(sDirCopy + sYear); }
-              // Keep the copies separate
-              sTarget = Path.GetFullPath(sDirCopy + sYear + "/" + oLog.name);
-              break;
-            case "":
-              // Check directory
-              if (!Directory.Exists(sDirOther + sYear)) { Directory.CreateDirectory(sDirOther + sYear); }
-              // Not enough information on this movie, so keep separate
-              sTarget = Path.GetFullPath( sDirOther + sYear + "/" + oLog.name);
-              break;
-            default:
-              // Check directory
-              if (!Directory.Exists(sDirFinal + sYear)) { Directory.CreateDirectory(sDirFinal + sYear); }
-              // Copy all to the 'final' directory
-              sTarget = Path.GetFullPath(sDirFinal + sYear + "/" + oLog.name);
-              break;
+          String sYearDir = "";
+          switch (oLog.stStatus) {  
+            case "copy": sYearDir = sDirCopy + sYear; break;    // This is a 'copy'
+            case "equal": sYearDir = sDirEqual + sYear; break;  // Status is 'equal'
+            case "": sYearDir = sDirOther + sYear; break;       // Unknown status??
+            default: sYearDir = sDirFinal + sYear; break;       // Includes: unique, largest
           }
+          // Check directory
+          if (!Directory.Exists(sYearDir)) { Directory.CreateDirectory(sYearDir); }
+          // Copy all to the 'final' directory
+          sTarget = Path.GetFullPath(sYearDir + "/" + oLog.name);
           // Perform the correct copies
           File.Copy(sFileFolia, sTarget + ".folia.xml.gz", true);
           File.Copy(sFileCmdi, sTarget + ".cmdi.xml", true);
@@ -202,6 +203,48 @@ namespace opsubcombi {
       }
     }
 
+    /// <summary>
+    /// doHeaderCsv -- Create a header for the CSV output
+    /// </summary>
+    /// <returns></returns>
+    public bool doHeaderCsv() {
+      try {
+        StringBuilder sbThis = new StringBuilder();
+        sbThis.Append("Name\t");
+        sbThis.Append("Cmdi\t");
+        sbThis.Append("Genres\t");
+        sbThis.Append("MovieId\t");
+        sbThis.Append("ImdbId\t");
+        sbThis.Append("MovieKind\t");
+        sbThis.Append("MovieLanguages\t");
+        sbThis.Append("MovieName\t");
+        sbThis.Append("imdbRating\t");
+        sbThis.Append("imdbVotes\t");
+        sbThis.Append("MovieYear\t");
+        sbThis.Append("ReleaseName\t");
+        sbThis.Append("SubDate\t");
+        sbThis.Append("SubId\t");
+        sbThis.Append("SubLanguage\t");
+        sbThis.Append("SubLicType\t");
+        sbThis.Append("SubStatusLink\t");
+        sbThis.Append("SubAvailable\t");
+        sbThis.Append("SubSentences\t");
+        sbThis.Append("SubStatus\t");
+        sbThis.Append("SubUserClass\t");
+        sbThis.Append("SubUserId\t");
+        sbThis.Append("SubUserPseudo\t");
+        sbThis.Append("SubWords\n");
+        String sLine = sbThis.ToString();
+        File.AppendAllText(this.sCsvFile, sLine, Encoding.UTF8);
+
+        // Return positively
+        return true;
+       } catch (Exception ex) {
+        errHandle.DoError("cmdConv/doHeaderCsv", ex);
+        return false;
+      }
+    }
+
 
     /// <summary>
     /// getCmdi - Check if the indicated file exists within the list of cmdi files
@@ -249,7 +292,7 @@ namespace opsubcombi {
               while (ndxWork != null) {
                 // Add this value
                 if (sbThis.Length > 0) sbThis.Append(";");
-                sbThis.Append(ndxThis.InnerText);
+                sbThis.Append(ndxWork.InnerText);
                 // Find next child
                 ndxWork = ndxWork.NextSibling;
               }
@@ -365,7 +408,7 @@ namespace opsubcombi {
     public String stUserId;       // Subtitle/Author/UserID
     public String stUserClass;    // Subtitle/Author/UserClass
     public String stWords;        // Subtitle/Statistics/nWords
-    public String stSentences;    // Subtitle/Statistics/nSents
+    public String stSentences;    // Subtitle/Statistics/nSentences
     public String stLng;          // Subtitle/languageAvailable
     public String stStatus;       // StatusInfo/@status
     public String stLink;         // StatusInfo/@link
