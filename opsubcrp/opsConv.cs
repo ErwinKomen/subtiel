@@ -22,6 +22,7 @@ namespace opsubcrp {
     private Dictionary<String, String> dicMovie = new Dictionary<string, string>();
     private string FOLIA_VERSION = "0.12.2";
     private bool bInit = false;
+    private string DEFAULT_TIME = "00:00:00.000";
     // ======================== Getters and setters =======================================
 
     // ======================== Public methods ============================================
@@ -420,6 +421,8 @@ namespace opsubcrp {
               sBegin = lSentWrds[k].s.Replace(',', '.');
               // Prevent empty-time-errors
               if (sBegin == "") sBegin = sTimeBkup.Replace(",", ".");
+              // Validate one last time
+              if (sBegin == "") sBegin = DEFAULT_TIME;
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "begintime", "attribute", "class", sBegin, "attribute");
               oTool.AddXmlChild(ndW, "feat", "subset", "n", "attribute", "class", lSentWrds[k].n, "attribute");
@@ -446,6 +449,10 @@ namespace opsubcrp {
           // Get the end-time
           sEnd = lSentWrds[lSentWrds.Count - 1].e.Replace(',', '.');
           if (sEnd == "") sEnd = sBegin;
+          // Validate begintime and endtime
+          if (sBegin == "") sBegin = DEFAULT_TIME;
+          if (sEnd == "") sEnd = DEFAULT_TIME;
+          // Only now write them away
           ndS.Attributes["begintime"].Value = sBegin;
           ndS.Attributes["endtime"].Value = sEnd;
           // The content of this sentence can now be output

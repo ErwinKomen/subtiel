@@ -61,6 +61,45 @@ namespace opsubcombi {
 
     // ================================ METHODS ===================================================
     /* -------------------------------------------------------------------------------------
+     * Name:        repairOneFolia
+     * Goal:        Check and repair one folia file
+     * History:
+     * 21/mar/2016 ERK Created
+       ------------------------------------------------------------------------------------- */
+    public bool repairOneFolia(String sFileFoliaGz) {
+      try {
+        // Get the unzipped file name
+        String sFileFolia = sFileFoliaGz.Replace(".gz", "");
+        // Unzip the file
+        if (!General.DecompressFile(sFileFoliaGz, sFileFolia)) { errHandle.DoError("cmbConv/repairOneFolia", "Could not decompress"); return false; }
+        // Check for empty begintime/endtime
+        String[] arLine = File.ReadAllLines(sFileFolia);
+        bool bChanged = false; int iChanges = 0;
+        for (int i=0;i<arLine.Length;i++) {
+          String sLine = arLine[i];
+          if (sLine.Contains("begintime=\"\"")) { sLine = sLine.Replace("begintime=\"\"", "begintime=\"00:00:00.000\""); bChanged = true; }
+          if (sLine.Contains("endtime=\"\"")) { sLine = sLine.Replace("endtime=\"\"", "endtime=\"00:00:00.000\""); bChanged = true; }
+          if (bChanged) { arLine[i] = sLine; iChanges++; }
+        }
+        // Only save results if something changed
+        if (bChanged) {
+          File.WriteAllLines(sFileFolia, arLine);
+          // Show repair log
+          errHandle.Status("Repaired file: [" + sFileFoliaGz + "] ("+iChanges+" repairs)");
+          // And compress into .gz
+          if (!General.CompressFile(sFileFolia, sFileFoliaGz)) { errHandle.DoError("cmbConv/repairOneFolia", "Could not compress"); return false; }
+        }
+        // Remove the unzipped file again
+        File.Delete(sFileFolia);
+
+        // Return positively
+        return true;
+      } catch (Exception ex) {
+        errHandle.DoError("cmdConv/repairOneFolia", ex);
+        return false;
+      }
+    }
+    /* -------------------------------------------------------------------------------------
      * Name:        harvestOneFolia
      * Goal:        Determine the status of this FoLiA file, and then:
      *              1) Store the harvest information in the list 

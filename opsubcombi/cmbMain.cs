@@ -26,6 +26,7 @@ namespace opsubcombi {
       String sFolia = "";       // Base directory to take (e.g. /vol/tensusers/ekomen)
       String sSubtiel = "";     // Base directory for the output (e.g: /vol/tensusers/ekomen/subtiel)
       String sCmdi = "";        // Base directory for CMDI files
+      String sAction = "combi"; // The particular type of action expected. Default "combi"
       bool bIsDebug = false;    // Debugging
 
       try {
@@ -51,6 +52,9 @@ namespace opsubcombi {
               case "l": // Language (three letter code)
                 sLanguage = args[++i];
                 break;
+              case "r": // INSTEAD of 'combi', perform 'REPAIR' action
+                sAction = "repair";
+                break;
             }
           } else {
             // Throw syntax error and leave
@@ -59,39 +63,53 @@ namespace opsubcombi {
         }
         // Check presence of input/output
         if (sFolia == "" || !Directory.Exists(sFolia)) { SyntaxError("No (valid) base directory for FoLiA input"); return; }
-        if (sCmdi == "" || !Directory.Exists(sCmdi)) { SyntaxError("No (valid) cmdi directory"); return; }
-        if (sSubtiel == "") { SyntaxError("No subtiel directory"); return; }
-        // If the target directory is not there, create it
-        if (!Directory.Exists(sSubtiel)) {
-          Directory.CreateDirectory(sSubtiel);
-        }
 
         // Initialise the Treebank Xpath functions, which may make use of tb:matches()
         XPathFunctions.conTb.AddNamespace("tb", XPathFunctions.TREEBANK_EXTENSIONS);
 
         // Create a new instance of the combination class
         cmbConv oConv = new cmbConv(errHandle);
-        oConv.output = sSubtiel;
 
-        // find .cmdi.xml files
-        errHandle.Status("Finding .cmdi.xml files...");
-        lstCmdi = Directory.GetFiles(sCmdi, "*.cmdi.xml", SearchOption.AllDirectories).ToList();
+        // Other directories depend on ACTION 
+        switch (sAction) {
+          case "repair":
+            // No further directories need be present
+            oConv.output = sFolia;
+            // Process all the directories with this action
+            WalkDirectoryTree(sFolia, "*.folia.xml.gz", sAction, ref oConv);
+            break;
+          default:
+            if (sCmdi == "" || !Directory.Exists(sCmdi)) { SyntaxError("No (valid) cmdi directory"); return; }
+            if (sSubtiel == "") { SyntaxError("No subtiel directory"); return; }
+            // If the target directory is not there, create it
+            if (!Directory.Exists(sSubtiel)) {
+              Directory.CreateDirectory(sSubtiel);
+            }
+            oConv.output = sSubtiel;
+            // find .cmdi.xml files
+            errHandle.Status("Finding .cmdi.xml files...");
+            lstCmdi = Directory.GetFiles(sCmdi, "*.cmdi.xml", SearchOption.AllDirectories).ToList();
 
-        // Convert the list of files into a dictionary
-        oConv.cmdi(lstCmdi);
+            // Convert the list of files into a dictionary
+            oConv.cmdi(lstCmdi);
 
-        // Find .folia.xml.gz files
-        errHandle.Status("Finding directories in " + sFolia);
-        // Walk all directories
-        errHandle.Status("Processing .folia.xml.gz files...");
-        // Resursive call for each subdirectory.
-        WalkDirectoryTree(sFolia, "*.folia.xml.gz", ref oConv);
+            // Find .folia.xml.gz files
+            errHandle.Status("Finding directories in " + sFolia);
+            // Walk all directories
+            errHandle.Status("Processing .folia.xml.gz files...");
+            // Output the header
+            oConv.doHeaderCsv();
+            // Resursive call for each subdirectory.
+            WalkDirectoryTree(sFolia, "*.folia.xml.gz", sAction, ref oConv);
 
-        // Save the harvested information to an xml file
-        if (!oConv.harvestSaveXml( sSubtiel + "/harvest.xml")) { 
-          errHandle.DoError("Main", "Could not create harvest summary xml file");
-          return;
+            // Save the harvested information to an xml file
+            if (!oConv.harvestSaveXml(sSubtiel + "/harvest.xml")) {
+              errHandle.DoError("Main", "Could not create harvest summary xml file");
+              return;
+            }
+            break;
         }
+
 
         // Exit the program
         errHandle.Status("Ready");
@@ -101,7 +119,14 @@ namespace opsubcombi {
       }
     }
 
-    static void WalkDirectoryTree(String sStartDir, String sFilter, ref cmbConv objConv) {
+    /// <summary>
+    /// WalkDirectoryTree -- Walk all the folia.xml.gz files in the indicated directory tree and take the given @sAction
+    /// </summary>
+    /// <param name="sStartDir"></param>
+    /// <param name="sFilter"></param>
+    /// <param name="sAction"></param>
+    /// <param name="objConv"></param>
+    static void WalkDirectoryTree(String sStartDir, String sFilter, String sAction, ref cmbConv objConv) {
       String[] arFiles = null;
       String[] arSubDirs = null;
 
@@ -123,10 +148,22 @@ namespace opsubcombi {
         // bSkip = true;
         // Walk all files in this directory
         foreach (String sFile in arFiles) {
-          // Process this file
-          if (!objConv.harvestOneFolia(sFile)) {
-            errHandle.DoError("Main", "Could not process file " + sFile);
-            return;
+          // Check the action that needs be taken
+          switch(sAction) {
+            case "repair":
+              // Check and repair this file
+              if (!objConv.repairOneFolia(sFile)) {
+                errHandle.DoError("Main", "Could not repair file " + sFile);
+                return;
+              }
+              break;
+            default:
+              // Process this file
+              if (!objConv.harvestOneFolia(sFile)) {
+                errHandle.DoError("Main", "Could not harvest file " + sFile);
+                return;
+              }
+              break;
           }
         }
 
@@ -135,7 +172,7 @@ namespace opsubcombi {
         // Walk all directories
         foreach (String sDirName in arSubDirs) {
           // Resursive call for each subdirectory.
-          WalkDirectoryTree(sDirName, sFilter, ref objConv);
+          WalkDirectoryTree(sDirName, sFilter, sAction, ref objConv);
         }
       }
     }
