@@ -26,6 +26,7 @@ namespace opsubcombi {
     private String sDirOther = "";                      // Subdirectory for any *other* results
     private String sCsvFile = "";                       // Full name of file that contains CSV information for each result
     private bool bInit = false;                         // Initialisation flag
+    private string DEFAULT_TIME = "00:00:00.000";
     // ================================ CLASS INITIALISATION ======================================
     public cmbConv(ErrHandle oErr) {
       this.errHandle = oErr;
@@ -74,20 +75,37 @@ namespace opsubcombi {
         if (!General.DecompressFile(sFileFoliaGz, sFileFolia)) { errHandle.DoError("cmbConv/repairOneFolia", "Could not decompress"); return false; }
         // Check for empty begintime/endtime
         String[] arLine = File.ReadAllLines(sFileFolia);
+        /*
+        if (sFileFoliaGz.Contains("S-O_00214801")) {
+          int iStop = 2;
+        } */
         bool bChanged = false; int iChanges = 0;
         for (int i=0;i<arLine.Length;i++) {
           String sLine = arLine[i];
-          if (sLine.Contains("begintime=\"\"")) { sLine = sLine.Replace("begintime=\"\"", "begintime=\"00:00:00.000\""); bChanged = true; }
-          if (sLine.Contains("endtime=\"\"")) { sLine = sLine.Replace("endtime=\"\"", "endtime=\"00:00:00.000\""); bChanged = true; }
-          if (bChanged) { arLine[i] = sLine; iChanges++; }
+          // Check the syntax of the begintime and the endtime
+          if (adaptTime(ref sLine, sLine.IndexOf("begintime="))) bChanged = true;
+          if (adaptTime(ref sLine, sLine.IndexOf("endtime="))) bChanged = true;
+          /*
+          if (sLine.Contains("begintime=\"\"")) {
+            sLine = sLine.Replace("begintime=\"\"", "begintime=\"00:00:00.000\"");
+            bChanged = true;
+          }
+          if (sLine.Contains("endtime=\"\"")) {
+            sLine = sLine.Replace("endtime=\"\"", "endtime=\"00:00:00.000\"");
+            bChanged = true;
+          } */
+          if (bChanged) { arLine[i] = sLine; iChanges++; bChanged = false; }
         }
         // Only save results if something changed
-        if (bChanged) {
+        if (iChanges>0) {
           File.WriteAllLines(sFileFolia, arLine);
           // Show repair log
           errHandle.Status("Repaired file: [" + sFileFoliaGz + "] ("+iChanges+" repairs)");
           // And compress into .gz
           if (!General.CompressFile(sFileFolia, sFileFoliaGz)) { errHandle.DoError("cmbConv/repairOneFolia", "Could not compress"); return false; }
+        } else {
+          // Show repair log
+          errHandle.Status("Unchanged: [" + sFileFoliaGz + "]");
         }
         // Remove the unzipped file again
         File.Delete(sFileFolia);
@@ -96,6 +114,37 @@ namespace opsubcombi {
         return true;
       } catch (Exception ex) {
         errHandle.DoError("cmdConv/repairOneFolia", ex);
+        return false;
+      }
+    }
+
+    /// <summary>
+    /// adaptTime -- Adapt the time within [sLine] starting at iStart
+    /// </summary>
+    /// <param name="sLine"></param>
+    /// <param name="iStart"></param>
+    /// <returns></returns>
+    private bool adaptTime(ref String sLine, int iStart) {
+      try {
+        // Check if any time has been detected
+        if (iStart < 0) return false;
+        // Get the first and the last quotation mark position
+        int iQuotFirst = sLine.IndexOf('"', iStart + 1);
+        if (iQuotFirst > 0) {
+          int iQuotLast = sLine.IndexOf('"', iQuotFirst + 1);
+          if (iQuotLast > 0) {
+            // Check the size we have
+            if (iQuotLast - iQuotFirst != 13) {
+              // The size is incorrect, so change it to ZEROES
+              sLine = sLine.Substring(0, iQuotFirst+1) + DEFAULT_TIME + sLine.Substring(iQuotLast);
+              return true;
+            }
+          }
+        }
+        // No changes, so return false
+        return false;
+      } catch (Exception ex) {
+        errHandle.DoError("cmbConv/adaptTime", ex);
         return false;
       }
     }

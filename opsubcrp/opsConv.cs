@@ -23,6 +23,7 @@ namespace opsubcrp {
     private string FOLIA_VERSION = "0.12.2";
     private bool bInit = false;
     private string DEFAULT_TIME = "00:00:00.000";
+    private string sTimeFrame = @"\d\d\:\d\d\:\d\d\.\d\d\d";
     // ======================== Getters and setters =======================================
 
     // ======================== Public methods ============================================
@@ -422,7 +423,7 @@ namespace opsubcrp {
               // Prevent empty-time-errors
               if (sBegin == "") sBegin = sTimeBkup.Replace(",", ".");
               // Validate one last time
-              if (sBegin == "") sBegin = DEFAULT_TIME;
+              sBegin = correctTime(sBegin);
               // Add the modification as feature to this node
               oTool.AddXmlChild(ndW, "feat", "subset", "begintime", "attribute", "class", sBegin, "attribute");
               oTool.AddXmlChild(ndW, "feat", "subset", "n", "attribute", "class", lSentWrds[k].n, "attribute");
@@ -450,8 +451,8 @@ namespace opsubcrp {
           sEnd = lSentWrds[lSentWrds.Count - 1].e.Replace(',', '.');
           if (sEnd == "") sEnd = sBegin;
           // Validate begintime and endtime
-          if (sBegin == "") sBegin = DEFAULT_TIME;
-          if (sEnd == "") sEnd = DEFAULT_TIME;
+          sBegin = correctTime(sBegin);
+          sEnd = correctTime(sEnd);
           // Only now write them away
           ndS.Attributes["begintime"].Value = sBegin;
           ndS.Attributes["endtime"].Value = sEnd;
@@ -466,8 +467,27 @@ namespace opsubcrp {
         // Return positively
         return true;
       } catch (Exception ex) {
-        errHandle.DoError("FlushOpsToFolia", ex); // Provide standard error message
+        errHandle.DoError("opsConv/FlushOpsToFolia", ex); // Provide standard error message
         return false;
+      }
+    }
+
+    /// <summary>
+    /// correctTime - convert the string into a correct time format
+    /// </summary>
+    /// <param name="sTimeIn"></param>
+    /// <returns></returns>
+    private String correctTime(String sTimeIn) {
+      try {
+        if (sTimeIn.Length == 12) {
+          // Double check the format
+          if (Regex.Match(sTimeIn, sTimeFrame).Success) return sTimeIn;
+        }
+        // Getting here: failure
+        return DEFAULT_TIME;
+      } catch (Exception ex) {
+        errHandle.DoError("opsConv/correctTime", ex); // Provide standard error message
+        return DEFAULT_TIME;
       }
     }
 
